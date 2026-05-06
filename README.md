@@ -1,45 +1,51 @@
-# Covariates-Aware-LongiGen
+# HyperNSDE
 
-This repository contains the implementation of a generative model for synthetic longitudinal health data based on Neural SDEs, incorporating relationships with static covariates.
-
-## 🚀 Clone this repository
-
-Some parts of this project depend on external Git repositories that are included as submodules.
-```bash
-git clone https://github.com/perrinechassat/Covariates-Aware-LongiGen.git
-cd Covariates-Aware-LongiGen
-git submodule update --init --recursive
-```
+Implementation of a generative model for synthetic longitudinal health data based on Neural SDEs, incorporating relationships with static covariates.
 
 ## ⚙️ Installation
 
-> **Prerequisite**: Make sure [Conda] is installed on your system.
+> **Prerequisite**: [Conda](https://docs.conda.io/en/latest/) must be installed.
 
-This project uses a Conda environment. To set it up, run:
 ```bash
+git clone https://github.com/anonymous/HyperNSDE.git
+cd HyperNSDE
+git submodule update --init --recursive
 bash install_env_conda.sh
 conda activate env_synth_longi
 ```
-<!-- 
-The script will:
-- Create a Conda environment named env_synth_longi
-- Install Cython, synthcity, and other required pip packages
-- Initialize external repositories via submodules
-- Upgrade torch and torchvision to the latest compatible versions -->
 
-<!-- ## Project structure
-
-project_root/
+## 📁 Project Structure
+HyperNSDE/
 │
-├── data_loader/             # Scripts or files related to data loading and preprocessing
+├── src/                        # Core model implementation
+│   ├── modules/                # Model building blocks (encoder, decoder, latent model)
+│   ├── evaluation/             # Evaluation metrics (fidelity, etc.)
+│   ├── build_module.py         # Model assembly
+│   ├── generative_model.py     # Main generative model class
+│   ├── losses.py               # Loss functions
+│   ├── hyperopt.py             # Hyperparameter optimization utilities
+│   ├── parser.py               # Argument parser
+│   └── utils.py                # Utility functions
 │
-├── datasets/                 
+├── data_loader/                # Data loading and preprocessing
 │
-├── exp_simulated_data/                
+├── datasets/                   # Dataset storage
+│   ├── Simu_OU/                # Simulated Ornstein-Uhlenbeck datasets
+│   ├── VELOUR/                 # VELOUR real dataset (not present)
+│   ├── PPMI/                   # PPMI real dataset (not present)
 │
-├── src/                
+├── experiments/                # Experiment configurations and results
+│   ├── simulations/            # Simulation experiments & Monte Carlo studies
+│   └── real_datasets/          # Experiments on real datasets
 │
-├── main.py                 
-├── run_optuna_hyperopt.py      
-├── environment.yml          # Conda environment specification file
-├── README.md   -->
+├── benchmark/                  # Baseline model implementations
+│   ├── rtsgan/                 # RTSGAN baseline
+│   ├── multiNODEs/             # MultiNODEs baseline
+│   ├── DGBFGP/                 # DGBFGP baseline
+│
+├── visualization_results/      # Result visualization and evaluation scripts
+│
+├── main.py                     # Training entry point
+├── run_optuna_hyperopt.py      # Hyperparameter search entry point
+├── environment.yml             # Conda environment specification
+└── install_env_conda.sh        # Installation script
