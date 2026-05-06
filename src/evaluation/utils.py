@@ -367,20 +367,6 @@ def fill_missing_values_long(x, mask, times, filling_type='last', tol=1e-7):
 
     return filled_data, mask, times
 
-    # --- Grid Regularization ---
-    # if is_regular:
-        # return filled_data, mask, times
-    # else:
-    #     dt_min = diff.min()
-    #     time_grid_reg = torch.arange(times.min().item(), times.max().item() + 1e-8, step=dt_min.item(), device=device)
-        
-    #     indices = torch.searchsorted(times, time_grid_reg, right=True) - 1
-    #     indices = torch.clamp(indices, 0, T - 1)
-        
-    #     filled_data_reg = filled_data[:, indices, :]
-    #     mask_reg = mask[:, indices, :]
-        
-    #     return filled_data_reg, mask_reg, time_grid_reg
 
 
 # ------------------------------------------------------------------ #

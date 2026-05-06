@@ -20,43 +20,6 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.cuda.amp import autocast, GradScaler
 import torchcde
 
-# def unbiased_mmd_sq(x1_compress, x2_compress, static_kernel, dyadic_order, lead_lag, device):
-#     """
-#     Unbiased MMD^2 from gram matrices with diagonal normalization
-#     to avoid large negative values.
-#     """
-#     kw = dict(dyadic_order=dyadic_order,
-#                 static_kernel=static_kernel,
-#                 time_aug=False,
-#                 lead_lag=lead_lag,
-#                 max_batch=8)
-
-#     K11 = pysiglib.sig_kernel_gram(x1_compress, x1_compress, **kw)  # (N1, N1)
-#     K22 = pysiglib.sig_kernel_gram(x2_compress, x2_compress, **kw)  # (N2, N2)
-#     K12 = pysiglib.sig_kernel_gram(x1_compress, x2_compress, **kw)  # (N1, N2)
-
-#     # Normalize by mean diagonal to stabilize kernel scale
-#     scale = K11.diag().mean().clamp(min=1e-8)
-#     K11 = K11 / scale
-#     K22 = K22 / scale
-#     K12 = K12 / scale
-
-#     # Unbiased estimator (exclude diagonal in self-terms)
-#     K11_sum = K11.sum() - K11.diag().sum()
-#     K22_sum = K22.sum() - K22.diag().sum()
-
-#     mmd_sq = (K11_sum / (N1 * (N1 - 1))
-#             + K22_sum / (N2 * (N2 - 1))
-#             - 2.0 * K12.mean())
-
-#     del K11, K22, K12
-#     torch.cuda.empty_cache()
-
-#     return mmd_sq.to(device)
-
-
-
-    
 
     
     
@@ -97,40 +60,6 @@ def maximum_mean_discrepancy_longi(
     ) -> Dict[str, float]:
 
     device = x_real.device
-
-
-    # if kernel == "sig linear" or kernel == "sig rbf":
-
-    #     if kernel == "sig linear":
-    #         static_kernel = pysiglib.LinearKernel()
-    #     else:
-    #         static_kernel = pysiglib.RBFKernel(sigmas)
-
-    #     if subtrack_init_point:
-    #         x_real = subtract_initial_point(x_real).to(x_real.device)
-    #         x_syn = subtract_initial_point(x_syn).to(x_syn.device)
-
-    #     if scale_time:
-    #         T_scale = ((T - T.min()) / (T.max() - T.min()))*3.5
-    #         x_real_time_aug = time_aug(x_real, T_scale)
-    #         x_syn_time_aug = time_aug(x_syn, T_scale)
-    #     else:
-    #         x_real_time_aug = time_aug(x_real, T)
-    #         x_syn_time_aug = time_aug(x_syn, T)
-
-    #     x_real_compress = compress_batch(x_real_time_aug, m_real)
-    #     x_syn_compress = compress_batch(x_syn_time_aug, m_syn)
-
-    #     x_real_compress = x_real_compress.contiguous()
-    #     x_syn_compress = x_syn_compress.contiguous()
-    #     mmd_score = pysiglib.sig_mmd(sample1=x_real_compress, 
-    #                             sample2=x_syn_compress,
-    #                             dyadic_order=dyadic_order,
-    #                             static_kernel=static_kernel,
-    #                             time_aug=False, # included separately because can be irregular
-    #                             lead_lag=lead_lag,
-    #                             max_batch=8).to(device)
-    #     return {"score": float(mmd_score.item())}
 
     if kernel == "sig linear" or kernel == "sig rbf":
 
@@ -204,29 +133,6 @@ def maximum_mean_discrepancy_longi(
                 out[f"mmd_sigma_{sigma:g}"] = float(val.item())
 
             return out
-        # # ---- Linear kernel ----
-        # if kernel == "sig linear":
-        #     static_kernel = pysiglib.LinearKernel()
-        #     mmd_score = unbiased_mmd_sq(x_real_compress, x_syn_compress, static_kernel)
-        #     return {"score": float(mmd_score.item())}
-
-        # # ---- RBF kernel (loop over sigmas) ----
-        # else:
-        #     mmd_values = []
-        #     for sigma in sigmas:
-        #         static_kernel = pysiglib.RBFKernel(sigma)
-        #         mmd_sigma = unbiased_mmd_sq(
-        #             x_real_compress, x_syn_compress, static_kernel, dyadic_order, lead_lag, device)
-        #         mmd_values.append(mmd_sigma)
-
-        #     mmd_tensor = torch.stack(mmd_values)
-        #     mmd_score  = mmd_tensor.mean()
-
-        #     out = {"score": float(mmd_score.item())}
-        #     for sigma, val in zip(sigmas, mmd_values):
-        #         out[f"mmd_sigma_{sigma:g}"] = float(val.item())
-
-        #     return out
         
 
     elif kernel == "gaussian":

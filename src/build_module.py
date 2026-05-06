@@ -11,8 +11,6 @@ from src.losses import create_discriminator
 from src.utils import init_network_weights
 warnings.filterwarnings('ignore')
 
-# Params config: [GPU, latent_dim, n_long_var, nhidden, static_data, s_vals_dim, s_onehot_dim, s_dim_static, z_dim_static, 
-#                   batch_norm_static, sde, sigma_kernel, kernel_type, n_scalings_kernel, max_batch_kernel]
 
 class Module(nn.Module):    
     def __init__(self, config, static_types, init_x=None, init_mask=None):
@@ -154,110 +152,5 @@ class Module(nn.Module):
         # Opacus only needs the module to hook into parameters
         return None
         
-
-    # def load_models(self):
-
-    #     if self.config.from_best:
-    #         ckpt_path_best = os.path.join(self.config.save_path_models, 'Best.pth')
-    #         if os.path.exists(ckpt_path_best):
-    #             print(f"Loading best checkpoint from {ckpt_path_best}")
-    #             if self.config.GPU:
-    #                 weights = torch.load(ckpt_path_best)
-    #             else:
-    #                 weights = torch.load(ckpt_path_best, map_location=torch.device('cpu'))
-    #         else:
-    #             raise FileNotFoundError(f"Best checkpoint not found at {ckpt_path_best}")
-    #     else: 
-    #         if self.config.epoch_init == 1:
-    #             ckpt_path = os.path.join(self.config.save_path_models, "Ckpt_latest.pth")
-    #             if os.path.exists(ckpt_path):
-    #                 print(f"Loading checkpoint from {ckpt_path}")
-    #                 if self.config.GPU:
-    #                     weights = torch.load(ckpt_path)
-    #                 else:
-    #                     weights = torch.load(ckpt_path, map_location=torch.device('cpu'))
-    #             else:
-    #                 print("No checkpoint found. Starting from scratch.")
-    #                 weights = None
-    #                 self.best_loss = float('inf')
-    #         else: 
-    #             epoch = self.config.epoch_init
-    #             ckpt_path = os.path.join(self.config.save_path_models, 'Ckpt_%d.pth'%(epoch))
-    #             if not os.path.exists(ckpt_path):
-    #                 print(f"Checkpoint for epoch {epoch} not found. Starting from latest.")
-    #                 ckpt_path = os.path.join(self.config.save_path_models, "Ckpt_latest.pth")
-    #             if self.config.GPU:
-    #                 weights = torch.load(ckpt_path)
-    #             else:
-    #                 weights = torch.load(ckpt_path, map_location=torch.device('cpu'))
-        
-    #     if weights is not None:        
-
-    #         self.config.epoch_init = weights['Epoch']
-    #         self.best_loss = weights['Val Loss']
-
-    #         # Restore running average meters state
-    #         if 'Train Loss' in weights:
-    #             self.train_loss.set_from_values(weights['Train Loss'])
-    #         if 'Train MSE' in weights:
-    #             self.train_mse.set_from_values(weights['Train MSE'])
-    #         if 'Val Loss' in weights:
-    #             self.val_loss.set_from_values(weights['Val Loss'])
-    #         if 'Val MSE' in weights:
-    #             self.val_mse.set_from_values(weights['Val MSE'])
-    #         if 'Val Losses Dict' in weights:
-    #             for task in self.tasks:
-    #                 if task in weights['Val Losses Dict']:
-    #                     self.val_losses_dict[task].set_from_values(weights['Val Losses Dict'][task])
-            
-    #         # Load model weights
-    #         self.L_Latent.load_state_dict(weights['L_Latent'])
-    #         self.L_Dec.load_state_dict(weights['L_Dec'])
-    #         self.optimizer.load_state_dict(weights['Opt'])
-    #         if self.config.type_enc != 'none':
-    #             self.L_Enc.load_state_dict(weights['L_Enc'])
-    #             self.Imp_Layer.load_state_dict(weights['IL'])
-    #         if self.config.static_data:
-    #             self.S_Enc.load_state_dict(weights['S_Enc'])
-    #             self.S_Dec.load_state_dict(weights['S_Dec'])
-                
-    #         print('Models have loaded from epoch:', self.config.epoch_init)
-
-
-    # def save(self, epoch, train_loss, val_loss, best=False):
-
-    #     weights = {}
-    #     weights['L_Latent'] = self.L_Latent.state_dict()
-    #     weights['L_Dec'] = self.L_Dec.state_dict()
-    #     weights['Opt'] = self.optimizer.state_dict()
-
-    #     if self.config.type_enc != 'none':
-    #         weights['L_Enc'] = self.L_Enc.state_dict()
-    #         weights['IL'] = self.Imp_Layer.state_dict()
-    #     if self.config.static_data:
-    #         weights['S_Enc'] = self.S_Enc.state_dict()
-    #         weights['S_Dec'] = self.S_Dec.state_dict()
-
-    #     weights['Train Loss'] = train_loss
-    #     weights['Val Loss'] = val_loss
-    #     weights['Epoch'] = epoch
-    #     weights['Train MSE'] = self.train_mse.avg
-    #     weights['Val MSE'] = self.val_mse.avg
-    #     weights['Val Losses Dict'] = {}
-    #     for task in self.tasks:
-    #         weights['Val Losses Dict'][task] = self.val_losses_dict[task].avg
-        
-    #     if best:
-    #         torch.save(weights, 
-    #             os.path.join(self.config.save_path_models, 'Best.pth'))
-    #     else:
-    #         torch.save(weights, 
-    #             os.path.join(self.config.save_path_models, 'Ckpt_%d.pth'%(epoch)))
-    #         torch.save(weights, 
-    #             os.path.join(self.config.save_path_models, 'Ckpt_latest.pth'))
-
-    #     print('Models have been saved')
-
-
 
     

@@ -89,18 +89,6 @@ class Decoder_MultiNODEs(nn.Module):
 
         out = self.fc2(out)  # out is pred_x
         return out
-    
-    
-# class Decoder(nn.Module):
-#     def __init__(self, config, latent_dim):
-#         super(Decoder, self).__init__()
-
-#         decoder = nn.Sequential(nn.Linear(latent_dim, config.n_long_var), )
-#         init_network_weights(decoder)
-#         self.decoder = decoder
-
-#     def forward(self, z, time_dim=None):
-#         return self.decoder(z)
         
 
 class Decoder(nn.Module):
@@ -150,17 +138,6 @@ class Decoder_w_Static(nn.Module):
         self.fc2 = nn.Linear(nhidden_number, config.n_long_var)
         self.drop = nn.Dropout(config.drop_dec)
 
-        # self.type_sig = config.dec_sig
-        # if self.type_sig == 'continue':
-        #     # Variance network
-        #     self.fc1_sigma = nn.Linear(latent_dim, nhidden_number)
-        #     self.fc2_sigma = nn.Linear(nhidden_number, config.n_long_var)
-        # else:
-        #     # Variance parameters
-        #     self.out_logsig = torch.nn.Parameter(torch.ones(config.n_long_var)*(-5.0))
-        
-        # self.sp = nn.Softplus()
-
     
     def forward(self, z, sample=False):
         
@@ -174,30 +151,5 @@ class Decoder_w_Static(nn.Module):
 
         return out 
 
-        # # Variance 
-        # if self.type_sig == 'continue':
-        #     out_logsig = self.fc1_sigma(z)
-        #     if self.act_dec == 'relu':
-        #         out_logsig = self.act(self.drop(out_logsig))
-        #     else:
-        #         out_logsig = self.drop(self.act(out_logsig))
-        #     out_logsig = self.fc2_sigma(out_logsig)
-        #     # sigma = self.sp(out_sigma)
-        #     std = torch.exp(0.5*out_logsig)
-        #     noise = torch.randn_like(out) * std
-        #     if sample:
-        #         out = out + noise
-            
-        #     return out, std
-        
-        # else: 
-        #     if sample:
-        #         # Add Gaussian noise based on the learned variance
-        #         # std = self.sp(self.out_logsig).sqrt()  # Convert log-sigma to std dev
-        #         std = torch.exp(0.5 * self.out_logsig)
-        #         std = std.view(1, 1, -1).expand_as(out)
-        #         out = out + torch.randn_like(out) * std
-            
-        #     return out
         
 

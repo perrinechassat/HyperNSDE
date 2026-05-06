@@ -4,7 +4,7 @@ GPU: True
 seed: 0
 train_dir: '/datasets' #   
 save_path: '/benchmark/multiNODEs/real_datasets/main_bestparam'
-exp_name: 'Physionet_2012_final_v3'
+exp_name: 'Physionet_2012_final'
 n_long_var: 9
 t_visits: 2881
 from_best: True

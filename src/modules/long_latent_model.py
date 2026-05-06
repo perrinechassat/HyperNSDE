@@ -5,12 +5,6 @@ import torch.nn.functional as F
 from src.utils import init_network_weights, split_last_dim, check_mask, linspace_vector, reverse
 
 
-# params in config: [num_ode_layers, act_ode, num_hypernet_layers, degree, static_data, 
-#                       sde_type, noise_type, GPU, diff_shape, latent_model, use_context, 
-#                       diff_mpl_size, diff_mlp_num_layers, act_diff, init_noise_size, init_mlp_size, 
-#                       init_mlp_num_layers, act_init]
-
-
 class LipSwish(torch.nn.Module):
     """
     LipSwish activation to control Lipschitz constant of MLP output
@@ -533,31 +527,6 @@ class EventRate(nn.Module):
 
         return int_lambda_obs
 
-    # def _integrate_trapezoidal(self, lambda_rates, T):
-    #     """
-    #     Fast vectorized trapezoidal integration over irregular grid.
-    #     lambda_rates: (batch_size, time_points, lambda_dim)
-    #     T: (time_points,)
-    #     Returns: integrated lambda (batch_size, time_points, lambda_dim)
-    #     """
-    #     batch_size, time_points, lambda_dim = lambda_rates.shape
-
-    #     # Time differences (T[1] - T[0], ..., T[N] - T[N-1]) => shape (time_points-1,)
-    #     dt = T[1:] - T[:-1]  # (N-1,)
-        
-    #     # Trapezoidal integration step-by-step
-    #     avg_rates = 0.5 * (lambda_rates[:, :-1, :] + lambda_rates[:, 1:, :])  # (B, N-1, D)
-    #     dt = dt.unsqueeze(0).unsqueeze(-1)  # (1, N-1, 1)
-    #     integral = avg_rates * dt  # (B, N-1, D)
-
-    #     # Cumulative sum along the time axis
-    #     cum_integral = torch.cumsum(integral, dim=1)  # (B, N-1, D)
-
-    #     # Pad with zeros at the start to match full time length
-    #     zero_pad = torch.zeros(batch_size, 1, lambda_dim, device=integral.device, dtype=integral.dtype)
-    #     int_lambda = torch.cat([zero_pad, cum_integral], dim=1)  # (B, N, D)
-
-    #     return int_lambda[:,-1,:]
     
     def _integrate_simpson(self, lambda_rates, T):
         """

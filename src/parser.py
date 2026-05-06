@@ -45,11 +45,6 @@ def base_parser(return_unknown=False):
                         type=bool, 
                         default=False,
                         help='Set False for CPU running')
-    # parser.add_argument('--mode',  
-    #                     type=str,
-    #                     default='train_full',
-    #                     choices=['train_full', 'only_train', 'only_rec', 'only_prior', 'only_posterior', 'opti_hyperparams'],
-    #                     help='Mode of the script')
     parser.add_argument('--dataset', 
                         type=str,
                         default='Simu_SIR',
@@ -64,9 +59,6 @@ def base_parser(return_unknown=False):
                         type=str,
                         default='/experiments/models',
                         help='Directory to save the model')
-    # parser.add_argument('--exp_name', 
-    #                     type=str,
-    #                     default='debug')
     parser.add_argument('--file_dataset', 
                         type=str, 
                         default='data.csv')
@@ -102,11 +94,7 @@ def base_parser(return_unknown=False):
                         type=int,
                         default=500,
                         help='Number of visits')
-    # parser.add_argument('--t_visits_obs', 
-    #                     type=int,
-    #                     default=100,
-    #                     help='Number of visits observed')
-    
+
     
     # Static data parameters
     parser.add_argument('--static_data', 
@@ -125,11 +113,7 @@ def base_parser(return_unknown=False):
                         type=bool,
                         default=False,
                         help='True if batch normalization is used for static data')
-    # parser.add_argument('--added_init_static', 
-    #                     type=int,
-    #                     default=0,
-    #                     help='Always 0 at the beginning')
-    
+
     
     # Latent model parameters
     parser.add_argument('--num_ode_layers', 
@@ -182,20 +166,11 @@ def base_parser(return_unknown=False):
                         type=int,
                         default=None,
                         help='Chunk size for processing large time grids')
-    # parser.add_argument('--use_mixed_precision', 
-    #                     type=bool,
-    #                     default=False,
-    #                     help='Use mixed precision training to reduce memory usage')
     parser.add_argument('--memory_efficient_ode', 
                         type=bool,
                         default=False,
                         help='Use memory-efficient ODE integration')
     
-    # parser.add_argument('--step_size_solver', 
-    #                     type=float,
-    #                     default=0.01,
-    #                     help='h option for the odeint solver')
-
     # Lambda
     parser.add_argument('--estim_event_rate', 
                         type=bool,
@@ -275,10 +250,6 @@ def base_parser(return_unknown=False):
                         type=int,
                         default=16,
                         help='For initial condition MLP network: number of neurons in each hidden layer.')
-    # parser.add_argument('--init_mlp_num_layers',  
-    #                     type=int,
-    #                     default=3,
-    #                     help='For initial condition MLP network: number of hidden layers.')
     parser.add_argument('--act_init',  
                         type=str,
                         default='LipSwish',
@@ -336,20 +307,6 @@ def base_parser(return_unknown=False):
                         type=float,
                         default=16,
                         help='Number of hidden units for the decoder')
-    # parser.add_argument('--type_dec', 
-    #                     type=str,
-    #                     default='LSTM',
-    #                     choices=['RNN', 'LSTM', 'orig', 'orig_w_static', 'Linear'])
-    # parser.add_argument('--nhidden_dec', 
-    #                     type=float,
-    #                     default=0.6974659448314735,
-    #                     help='in percentage')
-    # parser.add_argument('--dec_sig', 
-    #                     type=str,
-    #                     default='constant',
-    #                     choices=['constant', 'continue', 'computed', 'none'], 
-    #                     help='Type of the decoder for the variance')   
-    
 
     # Encoder parameters 
     parser.add_argument('--type_enc', 
@@ -459,41 +416,3 @@ def base_parser(return_unknown=False):
 
 
 
-
-    # parser.add_argument('--N_pop', 
-    #                         type=int,
-    #                         default=1,
-    #                         help='Describes how often a complete population is generated')
-    # parser.add_argument('--sigma_long', 
-    #                     type=int,
-    #                     default=1, 
-    #                     help='Describes the level of noise in the reparametrization trick when using posterior sampling') 
-    # parser.add_argument('--sigma_stat', 
-    #                     type=int,
-    #                     default=1,
-    #                     help='Describes the level of noise in the reparametrization trick when using posterior sampling') 
-    # parser.add_argument('--s_prob',
-    #                     default=[],
-    #                     help='vector with propability of s during prior sampling')
-    # parser.add_argument('--degree', 
-    #                     type=int,
-    #                     default=4, 
-    #                     help="Degree of the polynome in case type_ode='polynomial' ")
-
-
-
-    """to check """
-
-    #  # Specific simulation parameters
-    # parser.add_argument('--time_max', 
-    #                     type=int,
-    #                     default=1,
-    #                     help='Upper limit of simulated time')
-    # parser.add_argument('--time_min', 
-    #                     type=int,
-    #                     default=0,
-    #                     help='Lower limit of simulated time')
-    # parser.add_argument('--time_steps', 
-    #                     type=int,
-    #                     default=2000,
-    #                     help='Number of steps in the simulated time')

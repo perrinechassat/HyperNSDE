@@ -183,21 +183,6 @@ def optuna_hyperparameter_search(base_config, params_dict, n_trials=100, n_jobs=
         study = optuna.load_study(study_name=study_name, storage=storage)
     else:
         print("This optuna study ({}) does not exist. We create a new study.".format(db_file))
-        # default_params = {"lr":0.002, 
-        #                   "batch_size":256, 
-        #                   "z_dim_static":4, 
-        #                   "s_dim_static":5, 
-        #                   "latent_dim":4, 
-        #                   "nhidden":32, 
-        #                   "num_odelayers":1, 
-        #                   "num_hypernet_layers":3, 
-        #                   "weight_decay_drift":0.000707,
-        #                   "weight_decay_diff":0.000051, 
-        #                   "sigma_kernel":0.206652,
-        #                   "drop_dec":0., 
-        #                   "loss_scaling_ode":475.042843, 
-        #                   "loss_scaling_sde":0.013119, 
-        #                   "loss_scaling_poisson":0.965897}
         # default_params = {"lr":0.001, 
         #                   "batch_size":128, 
         #                   "z_dim_static":4, 

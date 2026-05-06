@@ -256,35 +256,6 @@ class Generative_Model_Longi_Static:
         
     # =============================== Compute all losses ===============================
     
-    # def _compress_batch(self, x, mask):
-    #     """
-    #     Robust vectorization:
-    #     1. Collapses feature mask (any(dim=-1)) to avoid duplicates.
-    #     2. Uses nonzero() + cumsum() to strictly preserve time order.
-        
-    #     x:    (B, T, F)
-    #     mask: (B, T, F) with 1=observed, 0=padded
-        
-    #     Return: (B, T_max, F) where T_max is max observed points in batch
-    #     """
-    #     B, T, F = x.shape
-    #     # Fixes Duplication: treating time steps as valid if *any* feature is observed
-    #     mask_time = mask.any(dim=-1) 
-    #     lengths = mask_time.sum(dim=1)
-    #     T_max = lengths.max().item()
-    #     if T_max == 0:
-    #         return torch.zeros((B, 0, F), device=x.device, dtype=x.dtype)
-
-    #     # nonzero() returns indices sorted by (batch, time), preserving strict time order.
-    #     valid_b, valid_t = mask_time.nonzero(as_tuple=True)
-    #     # cumsum counts how many valid steps occurred up to time t.
-    #     # We subtract 1 to convert count to 0-based index.
-    #     ranks = mask_time.cumsum(dim=1) - 1
-    #     valid_dest_t = ranks[valid_b, valid_t]
-    #     xs = torch.zeros((B, T_max, F), device=x.device, dtype=x.dtype)
-    #     xs[valid_b, valid_dest_t, :] = x[valid_b, valid_t, :]
-    #     return xs
-    
     def _compress_batch(self, x, mask, fill='last', align='left'):
         """
         Robust vectorization for compressing time series:
@@ -410,22 +381,10 @@ class Generative_Model_Longi_Static:
         # Decoder
         if self.config.sde:
             if self.config.sde_split_training:
-                # pred_x_mean = self.long_decoder(pred_z, z_stat=z_stat.to(self.device), time_grid=time_grid.to(self.device))
-                # pred_x_mean[mask == 0] = 0.0
-                # loss_ode = mse(x, pred_x_mean, mask, scale=False)
-                # losses_dict['Longi ODE'] = loss_ode + KL_z0 
-                # pred_x_residu = self.long_decoder(pred_r, z_stat=z_stat.to(self.device), time_grid=time_grid.to(self.device))
-                # pred_x_residu[mask == 0] = 0.0
-                # target_x_residu = x - pred_x_mean.detach()
-                # loss_sde = self._compute_sde_loss(pred_x_residu, target_x_residu, time_grid)
-                # losses_dict['Longi SDE'] = loss_sde
-                # pred_x = pred_x_mean + pred_x_residu
-
                 mask_any = mask.any(dim=-1)  # (B,T)
                 pred_z_obs = pred_z[mask_any]
                 pred_x_mean_obs = self.long_decoder(pred_z_obs, z_stat=z_stat.to(self.device), time_grid=time_grid.to(self.device))
                 pred_x_mean = self._reshape_obs(pred_x_mean_obs, mask)
-                # loss_ode = mse_old(x[mask_any], pred_x_mean_obs, mask=mask[mask_any])
                 loss_ode = mse(x, pred_x_mean, mask=mask)
                 losses_dict['Longi ODE'] = loss_ode + KL_z0 
                 pred_r_obs = pred_r[mask_any]
@@ -436,36 +395,20 @@ class Generative_Model_Longi_Static:
                 loss_sde = self._compute_sde_loss(pred_x_residu, target_x_residu, time_grid, mask)
                 losses_dict['Longi SDE'] = loss_sde    
             else:
-                # pred_x = self.long_decoder(pred_z, z_stat=z_stat.to(self.device), time_grid=time_grid.to(self.device))
-                # pred_x[mask == 0] = 0.0
-                # loss_ode = mse(x, pred_x, mask) # bof ça n'a pas trop de sens ici
-                # losses_dict['Longi ODE'] = loss_ode + KL_z0
-                # loss_sde = self._compute_sde_loss(pred_x, x, time_grid)
-                # losses_dict['Longi SDE'] = loss_sde
-
                 mask_any = mask.any(dim=-1)  # (B,T)
                 pred_z_obs = pred_z[mask_any]
                 pred_x_obs = self.long_decoder(pred_z_obs, z_stat=z_stat.to(self.device), time_grid=time_grid.to(self.device))                
                 pred_x = self._reshape_obs(pred_x_obs, mask)
-
-                # loss_ode = mse_old(x[mask_any], pred_x_obs, mask=mask[mask_any]) 
                 loss_ode = mse(x, pred_x, mask=mask) 
-                # losses_dict['Longi ODE'] = loss_ode + KL_z0 
                 loss_sde = self._compute_sde_loss(pred_x, x, time_grid, mask)
                 losses_dict['Longi SDE'] = loss_sde
 
         else: 
-            # mask_any = mask.any(dim=-1) # True where at least one variable observed, shape (B, T)
-            # pred_z_obs = pred_z[mask_any]
-            # pred_x_obs = self.long_decoder(pred_z_obs, z_stat=z_stat.to(self.device), time_grid=time_grid.to(self.device))
-            # pred_x = self._reshape_obs(pred_x_obs, mask)
-            # loss_ode = mse(x, pred_x, mask=mask) 
             pred_x = self.long_decoder(pred_z, z_stat=z_stat.to(self.device), time_grid=time_grid.to(self.device))
             loss_ode = mse(x, pred_x, mask=mask) 
 
             if scale_mse:
-                # loss_ode_scale = loss_ode * x.size(1) * x.size(2)
-                loss_ode_scale = loss_ode * 10.0 
+                loss_ode_scale = loss_ode * x.size(1) * x.size(2)
                 losses_dict['Longi ODE'] = loss_ode_scale + KL_z0
             else:
                 losses_dict['Longi ODE'] = loss_ode + KL_z0
@@ -756,8 +699,7 @@ class Generative_Model_Longi_Static:
             T_expanded = time_grid.view(1, -1, 1).expand(pred_z.shape[0], -1, 1).to(self.device)
             pred_z_with_t = torch.cat([pred_z, T_expanded], dim=-1)
             log_lambda = self.module.L_Latent._event_rate.log_lambda_net(pred_z_with_t)
-            # log_lambda = self.module.L_Latent._event_rate.log_lambda_net(pred_z)
-
+           
             lambda_T = torch.exp(log_lambda) # n_traj, n_timepoints, n_features_long
             if type_gen == 'reconstruction': 
                 mask_gen = mask
