@@ -1,0 +1,87 @@
+# General things
+optuna_study: 'optuna_HyperNDEs_OU_fixloss'
+GPU: True
+dataset: 'Simu_OU/monte_carlo'
+save_dir: '/experiments/optuna_results/HyperNDEs'
+file_dataset: 'simulated_dataset_MC_0'
+
+# Training parameters
+# batch_size: to optimize
+# lr: to optimize
+num_epochs: 800
+patience: 10
+print_freq: 20
+loss_aggregation: 'LS' 
+# loss_scaling_ode: 90.0
+# loss_scaling_sde: 0.92
+# loss_scaling_poisson: 0.043
+loss_scaling_static: 1.0
+
+long_normalization: 'absmax'
+max_norm: 1.0
+
+# Data parameters
+n_long_var: 3
+t_visits: 200
+    
+# Static data parameters
+static_data: True
+# z_dim_static: to optimize
+# s_dim_static: to optimize
+batch_norm_static: True
+  
+# Latent model parameters
+# num_ode_layers: to optimize
+act_ode: 'Tanh'
+# num_hypernet_layers: to optimize
+act_hypernetwork: 'ReLU'
+# latent_dim: to optimize
+# nhidden: to optimize
+solver: 'Normal' #'Adjoint'
+method_solver': 'dopri5'                              
+rtol: 0.001                                          
+atol: 0.0001 
+
+estim_event_rate: True
+lambda_mlp_size: 64
+lambda_num_layers: 1
+lambda_act: 'Tanh'
+lambda_dim: 1 # dep of the datasets (same missing between features or not)
+
+time_normalization: True
+# save_freq: 200
+# weight_decay_diff: to optimize
+# weight_decay_drift: to optimize
+
+# SDE
+latent_model: 'HyperNDEs'                             # 'MultiNDEs', 'StatMoNDEs', 'HyperNDEs'
+sde: True                                 # To change to True when using SDEs
+sde_type: 'stratonovich'
+noise_type: 'diagonal'
+diff_shape: 1
+# diff_mlp_size: to optimize
+# diff_mlp_num_layers: to optimize
+act_diff: 'LipSwish'
+res_drift_mlp_size: 16
+res_drift_mlp_num_layers: 1
+act_res_drift: 'LipSwish'
+
+# Training SDE 
+sde_training: 'MMD_PySig'           # 'MMD_FDM', 'MMD_SigKer'
+subtract_initial_point: True
+# sigma_kernel: 0.18 # to optimize (1.0 default)
+kernel_type: 'rbf'
+max_batch_kernel: 16
+sde_lead_lag: False
+sde_split_training: True
+
+# Decoder parameters
+type_dec: 'nonlinear'
+act_dec: 'Tanh' # to optimize 
+# nhidden_dec: to optimize
+# drop_dec: to optimize
+
+# Encoder parameters 
+type_enc: none
+fixed_init_cond: True
+t0_2_static: True

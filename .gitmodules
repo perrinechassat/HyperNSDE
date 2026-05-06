@@ -1,0 +1,3 @@
+[submodule "external/s4"]
+	path = external/s4
+	url = https://github.com/state-spaces/s4.git

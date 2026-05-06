@@ -1,0 +1,89 @@
+# General things
+GPU: True
+dataset: 'AVE0005'
+save_dir: '/experiments/results'
+file_dataset: ''
+exp_name: 'bestparam_HyperNDEs_AVE0005_ode_v4'
+seed: 0
+
+# Training parameters
+batch_size: 128
+lr: 0.002
+num_epochs: 900
+patience: 10
+print_freq: 1
+loss_aggregation: 'LS' 
+loss_scaling_ode: 0.1449603314219848
+loss_scaling_sde: 1.323186046549914
+loss_scaling_poisson: 0.0018405083147409352
+loss_scaling_static: 1.0
+
+
+long_normalization: 'zscore'
+max_norm: 1.0
+
+# Data parameters
+n_long_var: 23
+t_visits: 673
+    
+# Static data parameters
+static_data: True
+z_dim_static: 5
+s_dim_static: 4
+batch_norm_static: True
+  
+# Latent model parameters
+num_ode_layers: 1
+act_ode: 'Tanh'
+num_hypernet_layers: 5
+act_hypernetwork: 'ReLU'
+latent_dim: 5
+nhidden: 32
+solver: 'Normal' #'Adjoint'
+method_solver': 'dopri5'                              
+rtol: 0.001                                          
+atol: 0.0001 
+
+estim_event_rate: True
+lambda_mlp_size: 64
+lambda_num_layers: 1
+lambda_act: 'Tanh'
+lambda_dim: 23 # dep of the datasets (same missing between features or not)
+
+time_normalization: True
+save_freq: 300
+weight_decay_diff: 0.00014543 #3.168207276410713e-08 
+weight_decay_drift: 0.0000072
+
+# SDE
+latent_model: 'HyperNDEs'                             # 'MultiNDEs', 'StatMoNDEs', 'HyperNDEs'
+sde: False                                 # To change to True when using SDEs
+sde_type: 'stratonovich'
+noise_type: 'diagonal'
+diff_shape: 1
+diff_mlp_size: 64
+diff_mlp_num_layers: 1
+act_diff: 'LipSwish'
+res_drift_mlp_size: 16
+res_drift_mlp_num_layers: 1
+act_res_drift: 'LipSwish'
+
+# Training SDE 
+sde_training: 'MMD_PySig'           # 'MMD_FDM', 'MMD_SigKer'
+subtract_initial_point: True
+sigma_kernel: 0.0181
+kernel_type: 'rbf'
+max_batch_kernel: 16
+sde_lead_lag: False
+sde_split_training: True
+
+# Decoder parameters
+type_dec: 'nonlinear'
+act_dec: 'Tanh'
+nhidden_dec: 128
+drop_dec: 0.
+
+# Encoder parameters 
+type_enc: none
+fixed_init_cond: True
+t0_2_static: True

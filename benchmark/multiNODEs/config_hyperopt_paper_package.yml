@@ -1,0 +1,48 @@
+mode: 'train_full' # 'train_full', 'only_train', 'only_rec', 'only_prior', 'only_posterior'
+dataset: 'monte_carlo_15pct/simulated_dataset_MC_0' # 'simulated_dataset_3' 
+GPU: True
+seed: 666
+train_dir: '/datasets/Simu_OU' #   
+save_path: '/benchmark/multiNODEs/hyperopt' # /simulated_dataset_3'
+optuna_study: 'optuna_MultiNODEs_alpha0_15'
+                
+# Specific training parameters
+n_long_var: 3
+t_visits: 200
+static_data: True
+z_dim_static: 5
+s_dim_static: 5
+solver: 'Normal' # 'Adjoint', 'Normal', 'Julia'
+method_solver: 'dopri5' # 'dopri5', 'dopri8', 'bosh3', 'fehlberg2', 'adaptive_heun'
+rtol: 1.0e-3
+atol: 1.0e-3
+step_size_solver: 1.0e-3
+type_enc: 'LSTM' # 'RNN', 'LSTM'
+type_dec: 'orig' # 'RNN', 'LSTM', 'Orig'
+# drop_dec: 0.4951111384939868
+act_dec: 'tanh' # 'none', 'tanh', 'relu'
+num_ode_layers: 1 # 1, 2, 3
+act_ode: 'tanh' # 'none', 'tanh', 'relu'
+act_rnn: 'relu' # 'none', 'relu', 'tanh'
+batch_norm_static: True
+# batch_size: 0.400910825235765 # in percentage of the dataset
+from_best: False
+latent_dim: 1.518835 # in percentage of the long variables
+# lr: 0.001 
+# num_epochs: 1900
+epoch_init: 1
+nhidden: 5.023492
+rnn_nhidden_dec: 0.784353
+rnn_nhidden_enc: 0.317421
+scaling_ELBO: 0.432579
+# save_freq: 300
+print_freq: 20
+
+# Specific simulation parameters
+time_max: 1
+time_min: 0
+time_steps: 200
+s_prob: [] # vector with propability of s during prior sampling
+sigma_long: 1
+sigma_stat: 1
+N_pop: 1

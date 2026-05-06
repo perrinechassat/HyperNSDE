@@ -1,0 +1,16 @@
+seaborn>=0.13.2
+torchsde==0.2.6
+torchcde==0.2.5
+einops==0.8.1
+stochastic==0.6.0
+sktime==0.36.0
+openpyxl==3.1.5
+PyYAML==6.0.2
+tqdm==4.66.5
+scikit-learn==1.6.1
+optuna==4.3.0
+ipykernel==6.29.5
+tensorflow==2.19.0
+pytorch_lightning==2.5.1
+dataloader==2.0
+pysiglib==0.2.2

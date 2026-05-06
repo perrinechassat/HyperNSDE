@@ -1,0 +1,35 @@
+log_dir: "/benchmark/rtsgan/monte_carlo"
+task_name: "OU_with_best_config_Ntrain200"
+dataset: "monte_carlo_Ntrain200_datasets"
+
+epochs: 800
+iterations: 10000 # 15000
+d_update: 5
+ae_batch_size: 64
+gan_batch_size: 64
+gan_lr: 1.0e-4
+gan_alpha: 0.99
+# python-seed: 
+# debug: False
+# fix_ae: None
+# fix_gan: None
+# force: ""
+# devi: "0"
+N_generated_datasets: 50
+# to change with hyperopt results
+embed_dim: 512 # (1 + layers) * hidden_dim
+hidden_dim: 128 # 128
+layers: 3
+ae_lr: 5.67e-04
+weight_decay: 1.27e-07
+dropout: 0.0
+noise_dim: 128
+# embed-dim: 256 # 512
+# hidden-dim: 256 # 128
+# layers: 2 
+# ae-lr: 5.15e-04
+# weight-decay: 1.15e-07
+# dropout: 0.0
+# noise-dim: 256 # 512
+
+

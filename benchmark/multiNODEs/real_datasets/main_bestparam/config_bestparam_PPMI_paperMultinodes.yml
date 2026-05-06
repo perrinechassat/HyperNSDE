@@ -1,0 +1,48 @@
+mode: 'only_train' # 'train_full', 'only_train', 'only_rec', 'only_prior', 'only_posterior'
+dataset: 'PPMI' # ''
+GPU: True
+seed: 0
+train_dir: '/datasets' #   
+save_path: '/benchmark/multiNODEs/real_datasets/main_bestparam'
+exp_name: 'PPMI_param_paperMultiNODEs'
+n_long_var: 15
+t_visits: 686
+
+# Specific training parameters
+num_epochs: 3000
+lr: 0.0015680290621642827
+static_data: True
+z_dim_static: 3
+s_dim_static: 6
+solver: 'Normal' # 'Adjoint', 'Normal', 'Julia'
+method_solver: 'dopri5' # 'dopri5', 'dopri8', 'bosh3', 'fehlberg2', 'adaptive_heun'
+rtol: 1.0e-4
+atol: 1.0e-3
+step_size_solver: 1.0e-3
+type_enc: 'RNN' # 'RNN', 'LSTM'
+type_dec: 'orig' # 'RNN', 'LSTM', 'Orig'
+drop_dec: 0.4951111384939868
+act_dec: 'none' # 'none', 'tanh', 'relu'
+num_ode_layers: 1 # 1, 2, 3
+act_ode: 'none' # 'none', 'tanh', 'relu'
+act_rnn: 'none' # 'none', 'relu', 'tanh'
+batch_norm_static: True
+batch_size: 0.6400910825235765 # in percentage of the dataset
+from_best: False
+latent_dim: 1.8837462054054002 # in percentage of the long variables
+epoch_init: 1
+nhidden: 4.584466407303982
+rnn_nhidden_enc: 0.49866725741363976
+rnn_nhidden_dec: 0.6974659448314735
+scaling_ELBO: 0.9675595125571386
+save_freq: 300
+print_freq: 20
+
+# Specific simulation parameters
+time_max: 1
+time_min: 0
+s_prob: [] # vector with propability of s during prior sampling
+sigma_long: 1
+sigma_stat: 1
+N_pop: 50
+time_steps: 686

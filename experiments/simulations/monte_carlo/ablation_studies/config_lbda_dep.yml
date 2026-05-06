@@ -1,0 +1,90 @@
+# General things
+GPU: True
+dataset: 'Simu_OU'
+save_dir: '/experiments/results/monte_carlo'
+file_dataset: 'monte_carlo_lbda_dep_50pct'
+exp_name: 'MC_AS_lbdadep'
+
+# Training parameters
+batch_size: 256
+lr: 0.003 # 0.005
+num_epochs: 3000
+patience: 10
+loss_aggregation: 'LS' 
+loss_scaling_ode: 475.042843
+loss_scaling_sde: 0.013119
+loss_scaling_poisson: 0.965897
+loss_scaling_static: 1
+
+# Data parameters
+n_long_var: 3
+t_visits: 200
+    
+# Static data parameters 
+static_data: True
+z_dim_static: 4
+s_dim_static: 5
+batch_norm_static: True
+  
+long_normalization: 'absmax'
+max_norm: 1.0
+
+# Latent model parameters
+num_ode_layers: 1
+act_ode: 'Tanh'
+num_hypernet_layers: 3
+act_hypernetwork: 'ReLU'
+latent_dim: 4
+nhidden: 32
+solver: 'Normal' #'Normal' 'Adjoint'
+method_solver': 'dopri5'                              
+rtol: 0.001                                          
+atol: 0.0001 
+
+estim_event_rate: True
+lambda_mlp_size: 64
+lambda_num_layers: 1
+lambda_dim: 1
+lambda_act: 'Tanh'
+
+time_normalization: True
+save_freq: 100
+weight_decay_diff: 0.000051
+weight_decay_drift: 0.000707
+
+# SDE
+latent_model: 'HyperNDEs'            # 'MultiNDEs', 'StatMoNDEs', 'HyperNDEs'
+sde: True
+sde_type: 'stratonovich'
+noise_type: 'diagonal'
+diff_shape: 1
+diff_mlp_size: 64
+diff_mlp_num_layers: 1
+act_diff: 'LipSwish'
+res_drift_mlp_size: 16
+res_drift_mlp_num_layers: 1
+act_res_drift: 'LipSwish'
+
+# Training SDE 
+sde_training: 'MMD_PySig'           # 'MMD_FDM', 'MMD_SigKer', 'MMD_PySig'
+subtract_initial_point: True
+sigma_kernel: 0.206652
+kernel_type: 'rbf'
+# n_scalings_kernel: 8
+max_batch_kernel: 16
+sde_lead_lag: False
+sde_split_training: True
+
+# Decoder parameters
+type_dec: 'nonlinear'
+act_dec: 'Tanh'
+nhidden_dec: 32
+drop_dec: 0. 
+
+# Encoder parameters 
+type_enc: none
+fixed_init_cond: True
+t0_2_static: True
+# init_noise_size: 1
+# init_mlp_size: 16
+# act_init: 'Identity'
