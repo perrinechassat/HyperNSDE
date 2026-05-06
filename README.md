@@ -1,6 +1,6 @@
 # HyperNSDE
 
-HyperNSDE is a generative model for synthetic longitudinal health data based on Neural Stochastic Differential Equations. The model is designed to generate longitudinal trajectories while incorporating their relationships with static covariates.
+HyperNSDE is a generative model for synthetic health data that jointly models static covariates and irregular longitudinal trajectories using Neural Stochastic Differential Equations. The model captures dependencies between baseline/static patient characteristics and temporal dynamics, enabling the generation of realistic synthetic longitudinal datasets with associated static features.
 
 ## Installation
 
