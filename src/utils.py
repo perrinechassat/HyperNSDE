@@ -4,33 +4,9 @@ import yaml
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-from scipy import interpolate
-
 from sklearn.mixture import GaussianMixture
 
 
-def time_normalisation_transform(bank):
-    batch, stream, channel = bank.size()
-
-    res = torch.zeros((batch, stream, channel), device=bank.device)
-    res[:, :, 0] = torch.linspace(0, 1, stream, device=bank.device)
-    res[:, :, 1:] = bank[:, :, 1:]
-
-    return res
-
-# ==================================================================#
-# ======== Function for ODE-RNN Encoder of Latent ODE Paper ========#
-# ==================================================================#
-def split_last_dim(data):
-	last_dim = data.size()[-1]
-	last_dim = last_dim//2
-
-	if len(data.size()) == 3:
-		res = data[:,:,:last_dim], data[:,:,last_dim:]
-
-	if len(data.size()) == 2:
-		res = data[:,:last_dim], data[:,last_dim:]
-	return res
                
 def init_network_weights(net, std = 0.1):
     for m in net.modules():
@@ -38,38 +14,6 @@ def init_network_weights(net, std = 0.1):
             torch.nn.init.normal_(m.weight, mean=0, std=std)
             if m.bias is not None:
                 torch.nn.init.constant_(m.bias, val=0)
-        
-def check_mask(data, mask):
-    #check that "mask" argument indeed contains a mask for data
-    n_zeros = torch.sum(mask == 0.).cpu().numpy()
-    n_ones = torch.sum(mask == 1.).cpu().numpy()
-
-    # mask should contain only zeros and ones
-    assert((n_zeros + n_ones) == np.prod(list(mask.size())))
-
-    # all masked out elements should be zeros
-    assert(torch.sum(data[mask == 0.] != 0.) == 0)
-
-def linspace_vector(start, end, n_points):
-	# start is either one value or a vector
-	size = np.prod(start.size())
-
-	assert(start.size() == end.size())
-	if size == 1:
-		# start and end are 1d-tensors
-		res = torch.linspace(start, end, n_points)
-	else:
-		# start and end are vectors
-		res = torch.Tensor()
-		for i in range(0, start.size(0)):
-			res = torch.cat((res, 
-				torch.linspace(start[i], end[i], n_points)),0)
-		res = torch.t(res.reshape(start.size(0), n_points))
-	return res
-
-def reverse(tensor):
-	idx = [i for i in range(tensor.size(0)-1, -1, -1)]
-	return tensor[idx]
 
 def get_device(tensor):
 	device = torch.device("cpu")
@@ -77,20 +21,12 @@ def get_device(tensor):
 		device = tensor.get_device()
 	return device
 
-def sample_standard_gaussian(mu, sigma):
-	device = get_device(mu)
-
-	d = torch.distributions.normal.Normal(torch.Tensor([0.]).to(device), torch.Tensor([1.]).to(device))
-	r = d.sample(mu.size()).squeeze(-1)
-	return r * sigma.float() + mu.float()
-
 # ==================================================================#
 # ==================================================================#
 def load_yaml_config(file_path):
     with open(file_path, 'r') as f:
         config_dict = yaml.safe_load(f)
     return config_dict
-
 
 # ==================================================================#
 # ==================================================================#
@@ -218,13 +154,9 @@ def print_current_losses(epoch, iters, train_losses, val_losses, t_epoch, t_comp
                         if 'MSE' in k:
                             ax2.plot(time_vect, loss_df[k].values.tolist(), label=k, linewidth=2, linestyle='--')
                 ax1.set_xlabel("Epoch")
-                # ax1.set_ylabel("Loss (log scale)")
                 ax1.set_ylabel("Loss")
-                # ax1.set_yscale("log")
                 ax1.tick_params(axis='y')
-                # ax2.set_ylabel("MSE (log scale)")
                 ax2.set_ylabel("MSE")
-                # ax2.set_yscale("log")
                 ax2.tick_params(axis='y')
                 ax1.legend(loc='upper left', bbox_to_anchor=(0.05, 1))
                 ax2.legend(loc='upper right', bbox_to_anchor=(0.95, 1))
@@ -239,9 +171,7 @@ def print_current_losses(epoch, iters, train_losses, val_losses, t_epoch, t_comp
                 img_name = log_name[:-4] + '_train.png'
                 plt.legend()
                 plt.title('All Raw Losses Train Set')
-                # plt.yscale('log')
                 plt.xlabel('Epoch')
-                # plt.ylabel('Loss (log scale)')
                 plt.ylabel('Loss')
                 plt.savefig(img_name)
                 plt.close()
@@ -252,9 +182,7 @@ def print_current_losses(epoch, iters, train_losses, val_losses, t_epoch, t_comp
                 img_name = log_name[:-4] + '_validation.png'
                 plt.legend()
                 plt.title('All Raw Losses Validation Set')
-                # plt.yscale('log')
                 plt.xlabel('Epoch')
-                # plt.ylabel('Loss (log scale)')
                 plt.ylabel('Loss')
                 plt.savefig(img_name)
                 plt.close()
@@ -265,9 +193,7 @@ def print_current_losses(epoch, iters, train_losses, val_losses, t_epoch, t_comp
                 img_name = log_name[:-4] + '_smooth_validation.png'
                 plt.legend()
                 plt.title('All Smooth Losses Validation Set')
-                # plt.yscale('log')
                 plt.xlabel('Epoch')
-                # plt.ylabel('Loss (log scale)')
                 plt.ylabel('Loss')
                 plt.savefig(img_name)
                 plt.close()
@@ -288,37 +214,30 @@ def plot_final_losses(train_losses_list, val_losses_list, val_mses_list, log_nam
 
 def generate_poisson_process_thinning(lambdas, grid, T):
     """
-    Génère un processus de Poisson non homogènes sur [0, T] à partir des intensités en utilisant la méthode de thinning.
+    Generates a non-homogeneous Poisson process on [0, T] from the intensities using the thinning method.
 
     Args:
-        lambdas (torch.Tensor): Tenseur de forme (M,) représentant les intensités sur la grille fine.
-        grid (torch.Tensor): Tenseur de forme (M,) représentant la grille fine.
-        T (float): La durée totale de l'intervalle [0, T].
+        lambdas (torch.Tensor): Tensor of shape (M,) representing the intensities on the fine grid.
+        grid (torch.Tensor): Tensor of shape (M,) representing the fine grid.
+        T (float): Total duration of the interval [0, T].
 
     Returns:
-        torch.Tensor: Tenseur représentant les temps d'événements générés.
+        torch.Tensor: Tensor representing the generated event times.
     """
     M = len(lambdas)
 
-    # Trouver l'intensité maximale sur toute la grille
     lambda_max = lambdas.max().item()
 
-    # Générer des temps d'événements pour le i-ème processus de Poisson
     events = []
     t = 0
     while t < T:
-        # Générer un temps d'événement candidat selon un processus de Poisson homogène avec intensité lambda_max
         u = torch.rand(1)
         t_candidate = t - (1 / lambda_max) * torch.log(u)
 
         if t_candidate >= T:
             break
-
-        # Trouver l'indice correspondant sur la grille
         idx = torch.searchsorted(grid, t_candidate, right=True).item() - 1
         idx = max(0, min(idx, M - 1))
-
-        # Accepter ou rejeter l'événement candidat en fonction de l'intensité variable
         acceptance_prob = lambdas[idx].item() / lambda_max
         if torch.rand(1).item() < acceptance_prob:
             events.append(t_candidate)
@@ -328,42 +247,35 @@ def generate_poisson_process_thinning(lambdas, grid, T):
     return torch.tensor(events)
 
 
-
 def generate_poisson_processes_thinning(lambdas, grid, T):
     """
-    Génère N processus de Poisson non homogènes sur [0, T] à partir des intensités en utilisant la méthode de thinning.
+    Generates N non-homogeneous Poisson processes on [0, T] from the intensities using the thinning method.
 
     Args:
-        lambdas (torch.Tensor): Tenseur de forme (N, M) représentant les intensités sur la grille fine.
-        grid (torch.Tensor): Tenseur de forme (M,) représentant la grille fine.
-        T (float): La durée totale de l'intervalle [0, T].
+        lambdas (torch.Tensor): Tensor of shape (N, M) representing the intensities on the fine grid.
+        grid (torch.Tensor): Tensor of shape (M,) representing the fine grid.
+        T (float): Total duration of the interval [0, T].
 
     Returns:
-        List[torch.Tensor]: Liste de tenseurs représentant les temps d'événements générés pour chaque processus de Poisson.
+        List[torch.Tensor]: List of tensors representing the generated event times for each Poisson process.
     """
     N, M = lambdas.shape
     poisson_processes = []
-
-    # Trouver l'intensité maximale sur toute la grille
     lambda_max = lambdas.max().item()
 
     for i in range(N):
-        # Générer des temps d'événements pour le i-ème processus de Poisson
         events = []
         t = 0
         while t < T:
-            # Générer un temps d'événement candidat selon un processus de Poisson homogène avec intensité lambda_max
             u = torch.rand(1)
             t_candidate = t - (1 / lambda_max) * torch.log(u)
 
             if t_candidate >= T:
                 break
 
-            # Trouver l'indice correspondant sur la grille
             idx = torch.searchsorted(grid, t_candidate, right=True).item() - 1
             idx = max(0, min(idx, M - 1))
 
-            # Accepter ou rejeter l'événement candidat en fonction de l'intensité variable
             acceptance_prob = lambdas[i, idx].item() / lambda_max
             if torch.rand(1).item() < acceptance_prob:
                 events.append(t_candidate)
@@ -377,14 +289,14 @@ def generate_poisson_processes_thinning(lambdas, grid, T):
 
 def union_grids_with_tolerance(grids, tolerance):
     """
-    Fait l'union de plusieurs grilles avec une certaine tolérance.
+    Computes the union of multiple grids with a given tolerance.
 
     Args:
-        grids (List[torch.Tensor]): Liste de tenseurs représentant les grilles.
-        tolerance (float): Tolérance pour fusionner les valeurs proches.
+        grids (List[torch.Tensor]): List of tensors representing the grids.
+        tolerance (float): Tolerance used to merge close values.
 
     Returns:
-        torch.Tensor: Tenseur représentant l'union des grilles avec la tolérance spécifiée.
+        torch.Tensor: Tensor representing the union of the grids with the specified tolerance.
     """
     combined_grid = torch.cat(grids)
     combined_grid = torch.unique(combined_grid, sorted=True)
@@ -396,39 +308,6 @@ def union_grids_with_tolerance(grids, tolerance):
     combined_grid = combined_grid[mask]
 
     return combined_grid
-
-
-def generate_mask_grid_from_inhomogeneous_poisson_old(intensities, reg_grid):
-    n_samples = intensities.shape[0]
-    mask = torch.zeros(intensities.shape)
-    T = reg_grid[-1].item() if isinstance(reg_grid[-1], torch.Tensor) else float(reg_grid[-1])
-    for n in range(n_samples):
-        for k in range(intensities.shape[-1]):
-            lambda_nk = intensities[n, :, k]
-            K = len(reg_grid)
-            lambda_max = torch.max(lambda_nk)
-            N = int(torch.distributions.Poisson(T * lambda_max).sample().item())
-            if N == 0:
-                continue
-            I = torch.randint(0, K, (N,))
-            M = torch.zeros(I.shape)
-            for l in range(N):
-                num_interval = I[l].item()
-                u = torch.rand(1).item() * lambda_max
-                # u = self.rng.random() * lambda_max.item()
-                t_left = num_interval * T / K
-                t_right = (num_interval + 1) * T / K
-                # find idx of t_left and t_right in reg_grid
-                idx_left = torch.searchsorted(reg_grid, t_left, right=True).item() - 1
-                idx_right = torch.searchsorted(reg_grid, t_right, right=True).item() - 1
-                if u <= ((lambda_nk[idx_left] + lambda_nk[idx_right]) / 2).item():
-                    M[l] = 1.
-            if M.sum() == 0:
-                continue
-            else:
-                idx_new_grid_nk, _ = torch.sort(torch.unique(I[M.bool()]))
-                mask[n, idx_new_grid_nk, k] = 1.
-    return mask
 
 
 def generate_mask_grid_from_inhomogeneous_poisson(intensities, reg_grid):
@@ -527,71 +406,12 @@ def compute_marginal_distrib(arr_mu, arr_logvar):
     return mean_mu, mean_cov
 
 
-
-def sample_from_large_gmm(weights, means, covs, num_samples):
-    """
-    Sample from a GMM with many components.
-    
-    Args:
-        weights: Tensor of shape [N*K]
-        means: Tensor of shape [N*K, D]
-        covs: Tensor of shape [N*K, D, D] (full) or [N*K, D] (diagonal)
-        num_samples: int, number of samples
-
-    Returns:
-        samples: Tensor of shape [num_samples, D]
-    """
-    print(weights.shape, means.shape, covs.shape)
-    N_K, D = means.shape
-    weights_np = weights.cpu().numpy()
-    component_indices = np.random.choice(N_K, size=num_samples, p=weights_np)
-    
-    samples = []
-    for idx in component_indices:
-        mean = means[idx]
-        cov = covs[idx]
-        if cov.ndim == 1:
-            # Diagonal covariance
-            sample = torch.normal(mean, torch.sqrt(cov))
-        else:
-            # Full covariance
-            sample = torch.distributions.MultivariateNormal(mean, cov).sample()
-        samples.append(sample)
-
-    return torch.stack(samples, dim=0)  # [num_samples, D]
-
-
-def fit_gmm_with_k_components(samples, K):
-    """
-    Fit a K-component GMM to samples using sklearn.
-
-    Args:
-        samples: Tensor [num_samples, D]
-        K: int, desired number of components
-
-    Returns:
-        pi_k: [K] torch tensor of component weights
-        mu_k: [K, D] tensor of means
-        sigma_k: [K, D, D] tensor of covariances
-    """
-    samples_np = samples.cpu().numpy()
-    gmm = GaussianMixture(n_components=K, covariance_type='full')
-    gmm.fit(samples_np)
-
-    pi_k = torch.tensor(gmm.weights_, dtype=torch.float32)
-    mu_k = torch.tensor(gmm.means_, dtype=torch.float32)
-    sigma_k = torch.tensor(gmm.covariances_, dtype=torch.float32)
-
-    return pi_k, mu_k, sigma_k
-
-
 def subtract_initial_point(paths):
     _, length, dim = paths.size()
     res = paths.clone()
     start_points = torch.transpose(res[:, 0, 1:].unsqueeze(-1), -1, 1)
     res[..., 1:] -= torch.tile(start_points, (1, length, 1))
     return res
-    
 
 
 def invert_cumulative_intensity(cum_intensity, t_grid, value):
@@ -648,7 +468,6 @@ def simulate_inhomogeneous_poisson(cum_intensity, t_grid):
         events.append(t_event)
     
     return torch.tensor(events)
-
 
 
 def human_format(num):

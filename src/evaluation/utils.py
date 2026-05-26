@@ -369,66 +369,6 @@ def fill_missing_values_long(x, mask, times, filling_type='last', tol=1e-7):
 
 
 
-# ------------------------------------------------------------------ #
-# 2. Helper: build input tensor (filled past + time + static)          #
-# ------------------------------------------------------------------ #
-def build_input(x, m, T, W, N, T_split_idx):
-    """Returns (N, T_split_idx, input_dim) and m_past (N, T_split_idx, V)"""
-    x_fill, m_fill, _ = fill_missing_values_long(x, m, T, filling_type='last')
-    # Time channel: (N, T, 1)
-    T_ch = T.unsqueeze(0).unsqueeze(-1).expand(N, -1, -1).float()
-    inp = torch.cat([x_fill, T_ch], dim=-1)          # (N, T, V+1)
-    if W is not None:
-        W_rep = W.unsqueeze(1).expand(-1, T.shape[0], -1).float()
-        inp = torch.cat([inp, W_rep], dim=-1)         # (N, T, V+1+d_W)
-    # Keep only past
-    x_past = inp[:, :T_split_idx, :]                 # (N, T_split_idx, D)
-    m_past = m[:, :T_split_idx, :]                   # (N, T_split_idx, V)
-    return x_past, m_past, x_fill
-
-# ------------------------------------------------------------------ #
-# 3. Build future observation targets (variable-length per patient)    #
-# ------------------------------------------------------------------ #
-def build_future_targets(x, m, T, N, min_obs_future, max_obs_future, future_mask_t):
-    """
-    Returns:
-        valid_mask  (N,)  bool — patient has >= min_obs_future future obs
-        fut_vals    (N, max_obs_future, V)  padded with 0
-        fut_times   (N, max_obs_future)     padded with -1
-        fut_counts  (N,)  actual number of future obs per patient (capped)
-    """
-    # Observed AND future: (N, T_len, V) → reduce over V dim
-    obs_future = (m[:, :, :] > 0) & \
-                    future_mask_t.unsqueeze(0).unsqueeze(-1).expand(N, -1, V)
-    # Any variable observed at each time: (N, T_len)
-    any_obs_future = obs_future.any(dim=-1)
-
-    # Count future observed time points per patient
-    counts = any_obs_future.sum(dim=1)               # (N,)
-    valid_mask = counts >= min_obs_future             # (N,)
-
-    # Cap at max_obs_future
-    counts_capped = counts.clamp(max=max_obs_future)
-
-    # Gather future values and times (padded)
-    fut_vals  = torch.zeros(N, max_obs_future, V,
-                            device=x.device, dtype=x.dtype)
-    fut_times = torch.full((N, max_obs_future), -1.0,
-                            device=x.device, dtype=T.dtype)
-
-    for i in range(N):
-        if not valid_mask[i]:
-            continue
-        idx = torch.where(any_obs_future[i])[0]      # future obs indices
-        idx = idx[:max_obs_future]                    # cap
-        n   = idx.shape[0]
-        fut_vals[i, :n, :]  = x[i, idx, :]
-        fut_times[i, :n]    = T[idx]
-
-    return valid_mask, fut_vals, fut_times, counts_capped
-
-
-
 def expand_mask_to_last_obs(M):
     """
     M: (N, n_tps, n_vars) binary mask, 1 = observed

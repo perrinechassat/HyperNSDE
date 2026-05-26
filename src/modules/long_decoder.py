@@ -2,17 +2,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import time
-from src.utils import init_network_weights, split_last_dim, check_mask, linspace_vector, reverse
-
-# Params config: [act_dec, n_long_var, drop_dec]
-
-'linear', 'nonlinear'
 
 # ========================================
 # ========= DECODERS MultiNODEs ==========
 # ========================================
-
 
 class RecognitionRNN(nn.Module):
     # obs_dim is the number of longitudinal variables and latent_dim the z dim, 

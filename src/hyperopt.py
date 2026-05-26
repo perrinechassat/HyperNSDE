@@ -90,17 +90,17 @@ def optuna_hyperparameter_search(base_config, params_dict, n_trials=100, n_jobs=
             config.weight_decay_drift = trial.suggest_float('weight_decay_drift', *params_dict['weight_decay'], log=True)
 
         ## Parameters Lambda network
-        # if 'hidden_dim' in params_dict:
-        #     config.lambda_mlp_size = trial.suggest_categorical('lambda_mlp_size', params_dict['hidden_dim'])
+        if 'hidden_dim' in params_dict:
+            config.lambda_mlp_size = trial.suggest_categorical('lambda_mlp_size', params_dict['hidden_dim'])
         if 'lambda_act' in params_dict:
             config.lambda_act = trial.suggest_categorical('lambda_act', params_dict['lambda_act'])
 
         ## Parameters for SDE network and training
         if config.sde:
-            # if 'hidden_dim' in params_dict:
-            #     config.diff_mlp_size = trial.suggest_categorical('diff_mlp_size', params_dict['hidden_dim'])
-            # if 'diff_mlp_num_layers' in params_dict:
-            #     config.diff_mlp_num_layers = trial.suggest_int('diff_mlp_num_layers', *params_dict['diff_mlp_num_layers'], 1)
+            if 'hidden_dim' in params_dict:
+                config.diff_mlp_size = trial.suggest_categorical('diff_mlp_size', params_dict['hidden_dim'])
+            if 'diff_mlp_num_layers' in params_dict:
+                config.diff_mlp_num_layers = trial.suggest_int('diff_mlp_num_layers', *params_dict['diff_mlp_num_layers'], 1)
             if 'weight_decay' in params_dict:
                 config.weight_decay_diff = trial.suggest_float('weight_decay_diff', *params_dict['weight_decay'], log=True)
             if 'sigma_kernel' in params_dict:
@@ -111,8 +111,8 @@ def optuna_hyperparameter_search(base_config, params_dict, n_trials=100, n_jobs=
             config.act_dec = trial.suggest_categorical('act_dec', params_dict['act_dec']) 
         if 'hidden_dim' in params_dict:
             config.nhidden_dec = trial.suggest_categorical('nhidden_dec', params_dict['hidden_dim'])
-        # if 'drop_dec' in params_dict:
-            # config.drop_dec = trial.suggest_categorical('drop_dec', params_dict['drop_dec'])
+        if 'drop_dec' in params_dict:
+            config.drop_dec = trial.suggest_categorical('drop_dec', params_dict['drop_dec'])
 
         ## Loss scalings
         config.loss_scaling_static = 1.0
@@ -172,10 +172,6 @@ def optuna_hyperparameter_search(base_config, params_dict, n_trials=100, n_jobs=
 
     set_verbosity(INFO)
     
-    # storage = optuna.storages.RDBStorage(
-    #     url='sqlite:///'+db_file,
-    #     engine_kwargs={"connect_args": {"timeout": 120}} 
-    # )
     storage = 'sqlite:///'+db_file
     
     if os.path.exists(db_file):

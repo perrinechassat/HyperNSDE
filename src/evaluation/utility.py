@@ -9,7 +9,7 @@ from tqdm.auto import tqdm
 import sys
 sys.modules['pykeops'] = None
 from external.s4.models.s4.s4 import S4Block as S4D
-from src.evaluation.utils import fill_missing_values_long, build_future_targets, build_input
+from src.evaluation.utils import fill_missing_values_long
 import torch.jit as jit
 
 """
@@ -35,8 +35,6 @@ def prediction_score_TSTR(
     device='cuda',
     **kwargs
 ):
-    # Unpack Cached Real Data (Ground Truth)
-    # Ensure these are already on GPU to avoid transfers
     if cached_real_data is not None:
         x_test_real, m_test_real, y_test_real, ym_test_real = [t.clone() for t in cached_real_data]
     else: 
@@ -67,8 +65,6 @@ def prediction_score_TSTR(
         x_syn_aug = x_syn_f
 
     # Split Past (Input) / Future (Target)
-    # Input: All steps except last 'future_steps'
-    # Target: Last 'future_steps' of the longitudinal features ONLY
     if input_len is None:
         # input_len = x_syn_aug.size(1) - future_steps
         input_len = int(0.5*x_syn_aug.size(1))

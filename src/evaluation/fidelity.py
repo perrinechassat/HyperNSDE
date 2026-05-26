@@ -760,11 +760,6 @@ def evaluate_classifier_native(model, loader, criterion, device, use_amp, return
 # S4Classifier for Binary Classification ("real" vs. "synthetic")
 ###############################################################################
 
-# Recommended Hyperparameters for Discriminative Score:
-# d_model: 64 (Instead of 128 to prevent memorization)
-# n_layers: 2 or 4
-# dropout: 0.2 (Higher to force the model to learn general features)
-
 class S4Classifier(torch.nn.Module):
     def __init__(self, d_input, d_model=64, n_layers=2, dropout=0.2):
         super().__init__()
@@ -786,8 +781,6 @@ class S4Classifier(torch.nn.Module):
             z, _ = layer(z)
             x = x + z 
         x = x.transpose(-1, -2) # back to (B, T, D)
-        
-        # Global Average Pooling restricted to masked (valid) time steps. This is CRITICAL: it prevents the model from "cheating" using padding
         mask_val = mask[:, :, 0].unsqueeze(-1) # (B, T, 1)
         x = x * mask_val
         pooled = x.sum(dim=1) / (mask_val.sum(dim=1) + 1e-8)

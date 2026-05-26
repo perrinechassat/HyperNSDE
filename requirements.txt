@@ -23,6 +23,9 @@ stochastic==0.6.0
 # Hyperparameter optimization
 optuna==4.1.0
 
+# Differential Privacy
+opacus==1.5.4
+
 # Signature / kernel-related dependencies
 pysiglib==0.2.3
 

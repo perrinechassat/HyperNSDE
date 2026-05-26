@@ -149,7 +149,7 @@ class Module(nn.Module):
 
     def forward(self, *args, **kwargs):
         # Just a dummy forward; we won't actually use this in training
-        # Opacus only needs the module to hook into parameters
+        # Opacus only needs the module to hook into parameters # not implemented yet
         return None
         
 

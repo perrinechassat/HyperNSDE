@@ -1,19 +1,9 @@
-# from typing import Callable, Iterable, Union, List
-
-# import sigkernel
-# import torchcde
 import torch
-# import time
 import numpy as np
-# import pysiglib
 import pysiglib
-# from pysiglib import LinearKernel, RBFKernel
-
-# import signatory
 
 
 def masked_gaussian_log_density(x, pred_x, mask, out_logsig=None, pred_std=None):
-    # out_logsig = self.L_Dec.out_logsig
 
     if pred_x.dim() == 3:
         pred_x = pred_x.unsqueeze(0)
@@ -44,16 +34,6 @@ def log_normal_pdf(data, mean, logvar):
     const = torch.from_numpy(np.array([2. * np.pi])).float().to(data.device)
     const = torch.log(const)
     return -.5 * (const + logvar + (data - mean) ** 2. / torch.exp(logvar))
-
-
-# def mse(x, pred_x, mask, scale=True):
-#     if mask is None:
-#         mse = torch.mean((x - pred_x)**2)
-#     else:   
-#         mse = torch.sum(mask * (x - pred_x)**2)/torch.sum(mask)
-#     if scale:
-#         mse = mse * x.size(1) * x.size(2)
-#     return mse
 
 def mse_old(x, pred_x, mask):
     if mask is None:
@@ -192,7 +172,7 @@ def compute_poisson_proc_likelihood(log_lambda, int_lambda, mask=None, time_grid
         iK = iK.max(dim=1).values                          # (B,)
         iK = torch.clamp(iK, 0, T - 1)                     # Force within bounds
 
-    # --- 2. EOS Likelihood ---
+    # --- EOS Likelihood ---
     # Extract the exact log intensity at the final timestamp for each patient
     batch_indices = torch.arange(B, device=log_lambda.device)
     log_lambda_eos_at_Ti = log_lambda_eos[batch_indices, iK]  # (B,)
@@ -200,7 +180,7 @@ def compute_poisson_proc_likelihood(log_lambda, int_lambda, mask=None, time_grid
     # EOS loss: log(lambda_eos(T_i)) - integral(lambda_eos)
     log_prob_eos = log_lambda_eos_at_Ti - int_lambda_eos      # (B,)
 
-    # --- 3. Optional Scaling (Only applied to standard features) ---
+    # --- Optional Scaling (Only applied to standard features) ---
     if scale and mask is not None: 
         i0 = torch.where(mask_any, idx_seq, T)
         i0 = i0.min(dim=1).values
@@ -212,7 +192,7 @@ def compute_poisson_proc_likelihood(log_lambda, int_lambda, mask=None, time_grid
         
         log_prob_std = torch.where(has_obs.unsqueeze(1), log_prob_std / duration.unsqueeze(1), log_prob_std)
 
-    # --- 4. Final Combination ---
+    # --- Final Combination ---
     mean_log_prob_std = torch.mean(log_prob_std, dim=-1)  # (B,)
     total_log_l = mean_log_prob_std + torch.where(has_obs, log_prob_eos, torch.zeros_like(log_prob_eos))
 
