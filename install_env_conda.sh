@@ -11,9 +11,6 @@ echo "Installing pip and Cython in the environment..."
 conda install -y pip
 pip install Cython==3.1.2
 
-echo "Installing Synthcity with pip..."
-pip install synthcity==0.2.12
-
 echo "Installing other dependencies with pip..."
 pip install git+https://github.com/crispitagorico/sigkernel.git
 pip install -r requirements.txt
