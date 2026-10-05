@@ -47,6 +47,10 @@ class Generative_Model_Longi_Static:
                 if self.config.latent_model == 'HyperNDEs':
                     params_opt += [{'params': self.module.L_Latent._hypernetwork_drift.parameters(), 'weight_decay': self.config.weight_decay_drift}, # 0.0},
                                     {'params': self.module.L_Latent._residual.parameters(), 'weight_decay': self.config.weight_decay_diff}]
+                elif self.config.latent_model == 'FiLMNDEs':
+                    params_opt += [{'params': self.module.L_Latent._drift.parameters(), 'weight_decay': self.config.weight_decay_drift},
+                                {'params': self.module.L_Latent._film_generator_drift.parameters(), 'weight_decay': self.config.weight_decay_drift},
+                                {'params': self.module.L_Latent._residual.parameters(), 'weight_decay': self.config.weight_decay_diff}]
                 else:
                     params_opt += [{'params': self.module.L_Latent._drift.parameters(), 'weight_decay': self.config.weight_decay_drift},
                                     {'params': self.module.L_Latent._residual.parameters(), 'weight_decay': self.config.weight_decay_diff}]
@@ -54,11 +58,17 @@ class Generative_Model_Longi_Static:
                 if self.config.latent_model == 'HyperNDEs':
                     params_opt += [{'params': self.module.L_Latent._hypernetwork_drift.parameters(), 'weight_decay': self.config.weight_decay_drift}, 
                                    {'params': self.module.L_Latent._latent_sde.parameters(), 'weight_decay': self.config.weight_decay_diff}]
+                elif self.config.latent_model == 'FiLMNDEs':
+                    params_opt += [{'params': self.module.L_Latent._film_generator_drift.parameters(), 'weight_decay': self.config.weight_decay_drift},
+                                {'params': self.module.L_Latent._latent_sde.parameters(), 'weight_decay': self.config.weight_decay_diff}]
                 else:
                     params_opt += [{'params': self.module.L_Latent._latent_sde.parameters(), 'weight_decay': self.config.weight_decay_diff}]
         else:
             if self.config.latent_model == 'HyperNDEs':
                 params_opt += [{'params': self.module.L_Latent._hypernetwork_drift.parameters(), 'weight_decay': self.config.weight_decay_drift}]
+            elif self.config.latent_model == 'FiLMNDEs':
+                params_opt += [{'params': self.module.L_Latent._drift.parameters(), 'weight_decay': self.config.weight_decay_drift},
+                            {'params': self.module.L_Latent._film_generator_drift.parameters(), 'weight_decay': self.config.weight_decay_drift}]
             else:
                 params_opt += [{'params': self.module.L_Latent._drift.parameters(), 'weight_decay': self.config.weight_decay_drift}]
         if self.config.static_data:
@@ -213,6 +223,9 @@ class Generative_Model_Longi_Static:
         elif self.config.latent_model == 'HyperNDEs':
             weights_ode, biases_ode = self.module.L_Latent._hypernetwork_drift(z_stat.to(self.device))
             self.module.L_Latent._drift.set_params_model(weights_ode, biases_ode)
+        elif self.config.latent_model == 'FiLMNDEs':
+            gammas, betas = self.module.L_Latent._film_generator_drift(z_stat.to(self.device))
+            self.module.L_Latent._drift.set_film(gammas, betas)
         else: 
             raise ValueError(f"Unknown latent_model_type: {self.config.latent_model}")
 
@@ -373,7 +386,10 @@ class Generative_Model_Longi_Static:
         pred_z, pred_r = self.long_latent_model(z0_long, time_grid, z_stat)
 
         if self.config.estim_event_rate:
-            int_lambda, log_lambda = self.module.L_Latent._event_rate.compute_event_rate_complete(pred_z, time_grid.to(self.device), mask, method="trapezoidal")
+            if self.config.indep_event_rate:
+                int_lambda, log_lambda = self.module.L_Latent._event_rate.compute_event_rate_complete(pred_z, time_grid.to(self.device), mask, method="trapezoidal", state_indep=True)
+            else:
+                int_lambda, log_lambda = self.module.L_Latent._event_rate.compute_event_rate_complete(pred_z, time_grid.to(self.device), mask, method="trapezoidal")
             poisson_log_l = compute_poisson_proc_likelihood(log_lambda, int_lambda, mask = mask, time_grid=time_grid, scale=True)
             loss_poisson = torch.mean(-poisson_log_l, dim=0)
             losses_dict['Poisson'] = loss_poisson.to(self.device) 
@@ -686,6 +702,9 @@ class Generative_Model_Longi_Static:
             elif self.config.latent_model == 'HyperNDEs':
                 weights_ode, biases_ode = self.module.L_Latent._hypernetwork_drift(z_stat.to(self.device))
                 self.module.L_Latent._drift.set_params_model(weights_ode, biases_ode)
+            elif self.config.latent_model == 'FiLMNDEs':
+                gammas, betas = self.module.L_Latent._film_generator_drift(z_stat.to(self.device))
+                self.module.L_Latent._drift.set_film(gammas, betas)
             else: 
                 raise ValueError(f"Unknown latent_model_type: {self.config.latent_model}")
             pred_z = odeint(self.module.L_Latent._latent_sde.f, z0_ode, time_grid, rtol=self.config.rtol, atol=self.config.atol, method=self.config.method_solver) # Use regular integration
@@ -697,8 +716,11 @@ class Generative_Model_Longi_Static:
         int_lambda = None
         if self.config.estim_event_rate:
             T_expanded = time_grid.view(1, -1, 1).expand(pred_z.shape[0], -1, 1).to(self.device)
-            pred_z_with_t = torch.cat([pred_z, T_expanded], dim=-1)
-            log_lambda = self.module.L_Latent._event_rate.log_lambda_net(pred_z_with_t)
+            if self.config.indep_event_rate:
+                log_lambda = self.module.L_Latent._event_rate.log_lambda_net(T_expanded)
+            else:
+                pred_z_with_t = torch.cat([pred_z, T_expanded], dim=-1)
+                log_lambda = self.module.L_Latent._event_rate.log_lambda_net(pred_z_with_t)
            
             lambda_T = torch.exp(log_lambda) # n_traj, n_timepoints, n_features_long
             if type_gen == 'reconstruction': 

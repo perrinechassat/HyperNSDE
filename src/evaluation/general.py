@@ -33,7 +33,7 @@ FIDELITY_METRICS_REG = {
     "global_pairwise_corr": lambda real, syn, types, **kw: pairwise_correlation_global(
         real["X"], real["M"], real["W"], syn["X"], syn["M"], syn["W"], **kw
     ),
-    "longi.KL_obs_rate": lambda real, syn, types, **kw: kl_divergence_event_rate(
+    "longi.KL_obs_rate": lambda real, syn, types, **kw: event_intensity_quality( #kl_divergence_event_rate
         real["X"], real["M"], real["T"], syn["X"], syn["M"], syn["T"], **kw
     ),
     "discriminative_score": lambda real, syn, types, **kw: discriminative_score(

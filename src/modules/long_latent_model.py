@@ -214,42 +214,18 @@ def bottleneck_structure_MLP(num_layers=3, in_size=4, out_size=4, nhidden_number
 class MultiNDEs(nn.Module): 
     def __init__(self, config, in_size=4, out_size=4, nhidden_number=20):
         super(MultiNDEs, self).__init__()
-
         self.in_size = in_size
         self.out_size = out_size
-        # self.estim_event_rate = config.estim_event_rate
         self.sde = config.sde
         self.lambda_dim = config.lambda_dim
         self.model = bottleneck_structure_MLP(config.num_ode_layers, in_size, out_size, nhidden_number, config.act_ode)
         self.nfe = 0
-        # if self.estim_event_rate:
-        #     # self.log_lambda_net = MLP(in_size=self.out_size, out_size=1, mlp_size=config.lambda_mlp_size, num_layers=config.lambda_num_layers, activation=config.lambda_act, tanh=False)
-        #     self.log_lambda_net = MLP(in_size=self.out_size, out_size=config.lambda_dim, mlp_size=config.lambda_mlp_size, num_layers=config.lambda_num_layers, activation=config.lambda_act, tanh=False)
-
+    
     def forward(self, t, z):
         self.nfe += 1
-        # if self.estim_event_rate:
-        #     # if sde is True, z = [t, z_, Lambda]
-        #     zt = z[:,:-self.lambda_dim]
-        #     dz_dt = self.model(zt)
-        #     # if self.sde:
-        #     #     z_ = zt[:,1:]
-        #     # else: 
-        #     z_ = zt
-        #     dLambda_dt = torch.exp(self.log_lambda_net(z_))
-        #     out = torch.cat([dz_dt, dLambda_dt], dim=1)
-        # else: 
         out = self.model(z) 
         return out
-
-    # def extract_event_rate(self, z_Lambda):
-    #     if self.estim_event_rate:
-    #         int_lambda = z_Lambda[:,:,self.out_size:]        
-    #         z = z_Lambda[:,:,:self.out_size] 
-    #         log_lambda = self.log_lambda_net(z)
-    #         return z, int_lambda, log_lambda
-    #     else: 
-    #         raise RuntimeError("`extract_event_rate` should not be called when `estim_event_rate` is False in config.")
+    
 
 """ ______________________________________________________________________  
 
@@ -259,32 +235,15 @@ class MultiNDEs(nn.Module):
 class StatMoNDEs(nn.Module):
     def __init__(self, config, in_size=4, out_size=4, nhidden_number=20):
         super(StatMoNDEs, self).__init__()
-
         self.in_size = in_size
         self.out_size = out_size
-        # self.estim_event_rate = config.estim_event_rate
         self.sde = config.sde
         self.lambda_dim = config.lambda_dim
         self.model = bottleneck_structure_MLP(config.num_ode_layers, in_size, out_size, nhidden_number, config.act_ode)
         self.nfe = 0
-        # if self.estim_event_rate:
-        #     # self.log_lambda_net = MLP(in_size=self.out_size, out_size=1, mlp_size=config.lambda_mlp_size, num_layers=config.lambda_num_layers, activation=config.lambda_act, tanh=False)
-        #     self.log_lambda_net = MLP(in_size=self.out_size, out_size=config.lambda_dim, mlp_size=config.lambda_mlp_size, num_layers=config.lambda_num_layers, activation=config.lambda_act, tanh=False)
-
+        
     def forward(self, t, z):
         self.nfe += 1
-        # if self.estim_event_rate:
-        #     # if sde is True, z = [t, z_, Lambda]
-        #     zt = z[:,:-self.lambda_dim]
-        #     z_zstat = self.concat_zstat(zt)
-        #     dz_dt = self.model(z_zstat)
-        #     # if self.sde:
-        #     #     z_ = zt[:,1:]
-        #     # else: 
-        #     z_ = zt
-        #     dLambda_dt = torch.exp(self.log_lambda_net(z_)) # ici on pourrait faire dépendre des statiques en mettant z_zstat et en changeant la taille de log_lambda_net
-        #     out = torch.cat([dz_dt, dLambda_dt], dim=1)
-        # else: 
         z = self.concat_zstat(z)
         out = self.model(z)
         return out
@@ -297,16 +256,88 @@ class StatMoNDEs(nn.Module):
             return torch.cat([z, self.zstat], dim=1) 
         else:
             return z
+
         
-    # def extract_event_rate(self, z_Lambda):
-    #     if self.estim_event_rate:
-    #         int_lambda = z_Lambda[:,:,self.out_size:]        
-    #         z = z_Lambda[:,:,:self.out_size] 
-    #         log_lambda = self.log_lambda_net(z)
-    #         return z, int_lambda, log_lambda
-    #     else: 
-    #         raise RuntimeError("`extract_event_rate` should not be called when `estim_event_rate` is False in config.")
-        
+""" ______________________________________________________________________  
+
+        FiLMNDEs -- FiLM-based Neural Differential Equation  
+    ______________________________________________________________________"""
+
+
+class FiLMNDEs(nn.Module):
+    def __init__(self, config, in_size=4, out_size=4, nhidden_number=20):
+        super(FiLMNDEs, self).__init__()
+        self.in_size = in_size
+        self.out_size = out_size
+        self.sde = config.sde
+        self.lambda_dim = config.lambda_dim
+        self.model = bottleneck_structure_MLP(config.num_ode_layers, in_size, out_size, nhidden_number, config.act_ode)
+        self.nfe = 0
+
+        # widths at which FiLM is applied: the OUTPUT dim of every Linear except the last
+        self.linears = [m for m in self.model if isinstance(m, nn.Linear)]
+        self.film_dims = [lin.out_features for lin in self.linears[:-1]]
+        self.gammas = None
+        self.betas = None
+
+    def set_film(self, gammas, betas):
+        self.gammas = gammas
+        self.betas = betas
+
+    def forward(self, t, z):
+        self.nfe += 1
+        out = z
+        film_idx = 0
+        n_lin = len(self.linears)
+        lin_seen = 0
+        for layer in self.model:
+            out = layer(out)
+            if isinstance(layer, nn.Linear):
+                lin_seen += 1
+                if lin_seen < n_lin and self.gammas is not None:
+                    g = 1.0 + self.gammas[film_idx]
+                    b = self.betas[film_idx]
+                    out = g * out + b
+                    film_idx += 1
+        return out
+
+
+
+class FiLMGenerator(nn.Module):
+    """Maps the static latent z_stat -> per-layer (gamma, beta) for the drift MLP.
+ 
+    Analogous to Hypernetwork, but the output is 2 * (sum of hidden widths) numbers
+    instead of the full weight tensor, so it is far smaller.
+    """
+    def __init__(self, config, latent_dim_stat, film_dims):
+        super().__init__()
+        # film_dims: list of the widths at which FiLM is applied (one per modulated layer output)
+        self.film_dims = film_dims
+        self.total_film = 2 * sum(film_dims)   # gamma + beta per unit
+ 
+        if config.act_hypernetwork != "LipSwish":
+            self.act = getattr(torch.nn, config.act_hypernetwork)()
+        else:
+            self.act = LipSwish()
+ 
+        hidden = getattr(config, "film_hidden_dim", 64)
+        n_layers = getattr(config, "num_film_layers", 2)
+        dims = [latent_dim_stat] + [hidden] * (n_layers - 1) + [self.total_film]
+        layers = []
+        for i in range(len(dims) - 1):
+            layers.append(nn.Linear(dims[i], dims[i + 1]))
+            if i < len(dims) - 2:
+                layers.append(self.act)
+        self.net = nn.Sequential(*layers)
+ 
+    def forward(self, z_stat):
+        out = self.net(z_stat)                       # (B, total_film)
+        gammas, betas, start = [], [], 0
+        for d in self.film_dims:
+            gammas.append(out[:, start:start + d]); start += d
+            betas.append(out[:, start:start + d]); start += d
+        return gammas, betas
+
 
 
 """ ______________________________________________________________________  
@@ -329,15 +360,10 @@ class HyperNDEs(nn.Module):
         self.sde = config.sde
         self.in_size = in_size
         self.out_size = out_size
-        # self.estim_event_rate = config.estim_event_rate
         self.ode_model = bottleneck_structure_MLP(config.num_ode_layers, in_size, out_size, nhidden_number, config.act_ode)
         self.nfe = 0
         self.lambda_dim = config.lambda_dim
         
-        # if self.estim_event_rate:
-        #     # self.log_lambda_net = MLP(in_size=self.out_size, out_size=1, mlp_size=config.lambda_mlp_size, num_layers=config.lambda_num_layers, activation=config.lambda_act, tanh=False)
-        #     self.log_lambda_net = MLP(in_size=self.out_size, out_size=config.lambda_dim, mlp_size=config.lambda_mlp_size, num_layers=config.lambda_num_layers, activation=config.lambda_act, tanh=False)
-
         tot_num_params, params_shape = self._get_model_shape(self.ode_model)
         self.tot_num_params = tot_num_params
         self.params_shape = params_shape
@@ -362,8 +388,6 @@ class HyperNDEs(nn.Module):
     def compute_ode_model(self, z):
         out = z
         for i in range(len(self.weights)):
-            # print('shape weights i', self.weights[i].shape)
-            # print('shape biases i', self.biases[i].shape)
             out = torch.bmm(out.unsqueeze(1), self.weights[i]).squeeze(1) + self.biases[i] # (batch_size, out_dim)
             if i < self.nb_layer-1:
                 out = self.act(out)
@@ -371,29 +395,9 @@ class HyperNDEs(nn.Module):
 
     def forward(self, t, z):
         self.nfe += 1
-        # if self.estim_event_rate:
-        #     # if sde is True, z = [t, z_, Lambda]
-        #     zt = z[:,:-self.lambda_dim] 
-        #     dz_dt = self.compute_ode_model(zt)
-        #     # z_ = zt
-        #     # log_lambda = self.log_lambda_net(z_)
-        #     log_lambda = self.log_lambda_net(zt)
-        #     # log_lambda = torch.clamp(log_lambda, min=-10, max=10)
-        #     dLambda_dt = torch.exp(log_lambda)
-        #     out = torch.cat([dz_dt, dLambda_dt], dim=1)
-        # else: 
         out = self.compute_ode_model(z)
         return out 
-
-    # def extract_event_rate(self, z_Lambda):
-    #     if self.estim_event_rate:
-    #         int_lambda = z_Lambda[:,:,self.out_size:]        
-    #         z = z_Lambda[:,:,:self.out_size] 
-    #         log_lambda = self.log_lambda_net(z)
-    #         return z, int_lambda, log_lambda
-    #     else: 
-    #         raise RuntimeError("`extract_event_rate` should not be called when `estim_event_rate` is False in config.")
-
+    
     
 class Hypernetwork(nn.Module):
     def __init__(self, config, latent_dim_stat, num_params, main_model_shapes, max_hidden_dim=None):
@@ -593,8 +597,9 @@ class EventRate(nn.Module):
         assert(torch.sum(int_lambda[:,0,:]) == 0.)
         assert(torch.sum(int_lambda[0,-1,:] <= 0) == 0.)
         return int_lambda[:,-1,:] 
-    
-    def compute_event_rate_complete(self, z_trajectory, T, mask, method='trapezoidal'):
+
+
+    def compute_event_rate_complete(self, z_trajectory, T, mask, method='trapezoidal', state_indep=False):
         """
         Complete event rate computation with integration on irregular grid.
         
@@ -609,10 +614,14 @@ class EventRate(nn.Module):
         # Compute log_lambda for all time points
         # log_lambda = self.log_lambda_net(z_trajectory)  # (batch_size, time_points, lambda_dim)
 
-        # Version where log_lambda depends on time as well (time-augmented input)
         T_expanded = T.view(1, -1, 1).expand(z_trajectory.shape[0], -1, 1).to(z_trajectory.device)
-        z_with_t = torch.cat([z_trajectory, T_expanded], dim=-1)  # Shape: (batch_size, time_points, latent_dim + 1)
-        log_lambda = self.log_lambda_net(z_with_t)  # (batch_size, time_points, lambda_dim)
+
+        if state_indep:
+            log_lambda = self.log_lambda_net(T_expanded)
+        else:
+            # Version where log_lambda depends on time as well (time-augmented input)
+            z_with_t = torch.cat([z_trajectory, T_expanded], dim=-1)  # Shape: (batch_size, time_points, latent_dim + 1)
+            log_lambda = self.log_lambda_net(z_with_t)  # (batch_size, time_points, lambda_dim)
         
         # Integrate lambda rates based on method
         if method == 'trapezoidal':
@@ -674,13 +683,6 @@ class NSDE(nn.Module):
                             config.act_diff, 
                             tanh=True, 
                             softplus=False).to(self.device)
-        
-        # self._initial = MLP(config.init_noise_size, 
-        #                     in_size_ode_model - 1, 
-        #                     config.init_mlp_size, 
-        #                     config.init_mlp_num_layers, 
-        #                     config.act_init, 
-        #                     tanh=False).to(self.device)
 
         
     def f_and_g(self, t, z):
@@ -688,15 +690,6 @@ class NSDE(nn.Module):
         t_exp = t.expand(z.size(0), 1)
         tz = torch.cat([t_exp, z], dim=1)
         drift = self._drift(t, tz)
-        # if self.estim_event_rate:
-        #     vec_zeros = torch.zeros(tz[:,-1:].shape, device=self.device)
-        #     tz_ = tz[:,:-1]
-        #     if self.noise_type == "diagonal":
-        #         diffusion = self._diffusion(tz_)
-        #     else:
-        #         diffusion = self._diffusion(tz_).view(z.size(0), self.out_size, self._diff_shape)
-        #     diffusion = torch.cat([diffusion, vec_zeros], dim=1)
-        # else:
         if self.noise_type == "diagonal":
             diffusion = self._diffusion(t, tz)
         else:
@@ -711,15 +704,6 @@ class NSDE(nn.Module):
     def g(self, t, z):
         t = t.expand(z.size(0), 1)
         tz = torch.cat([t, z], dim=1)
-        # if self.estim_event_rate:
-        #     vec_zeros = torch.zeros(tz[:,-1:].shape, device=self.device)
-        #     tz_ = tz[:,:-1] 
-        #     if self.noise_type == "diagonal":
-        #         diffusion = self._diffusion(tz_)
-        #     else:
-        #         diffusion = self._diffusion(tz_).view(z.size(0), self.out_size, self._diff_shape)
-        #     diffusion = torch.cat([diffusion, vec_zeros], dim=1)
-        # else:
         if self.noise_type == "diagonal":
             diffusion = self._diffusion(t, tz)
         else:
@@ -767,7 +751,10 @@ class Longitudinal_Latent_Model(nn.Module):
                 else:
                     self._latent_sde = NSDE(config, self.lat_size_long_in + self.lat_size_stat, self.in_size, self.out_size, drift_model=self._drift).to(self.device)
             if config.estim_event_rate:
-                self._event_rate = EventRate(config, self.out_size + 1).to(self.device)
+                if config.indep_event_rate:
+                    self._event_rate = EventRate(config, 1).to(self.device)
+                else:
+                    self._event_rate = EventRate(config, self.out_size + 1).to(self.device)
 
         elif config.latent_model == 'StatMoNDEs':
             if config.sde and not config.sde_split_training:
@@ -788,7 +775,10 @@ class Longitudinal_Latent_Model(nn.Module):
                 else:
                     self._latent_sde = NSDE(config, self.lat_size_long_in, self.in_size, self.out_size, drift_model=self._drift).to(self.device)
             if config.estim_event_rate:
-                self._event_rate = EventRate(config, self.out_size + 1).to(self.device)
+                if config.indep_event_rate:
+                    self._event_rate = EventRate(config, 1).to(self.device)
+                else:
+                    self._event_rate = EventRate(config, self.out_size + 1).to(self.device)
 
         elif config.latent_model == 'HyperNDEs':
             if config.sde and not config.sde_split_training:
@@ -816,7 +806,37 @@ class Longitudinal_Latent_Model(nn.Module):
                 else:
                     self._latent_sde = NSDE(config, self.lat_size_long_in, self.in_size, self.out_size, drift_model=self._drift).to(self.device)
             if config.estim_event_rate:
-                self._event_rate = EventRate(config, self.out_size + 1).to(self.device)
+                if config.indep_event_rate:
+                    self._event_rate = EventRate(config, 1).to(self.device)
+                else:
+                    self._event_rate = EventRate(config, self.out_size + 1).to(self.device)
+
+        elif config.latent_model == 'FiLMNDEs':
+            if config.sde and not config.sde_split_training:
+                self.in_size = self.lat_size_long_in + 1 # time-augmented process in input
+            else:
+                self.in_size = self.lat_size_long_in 
+            self.out_size = self.lat_size_long_out
+            if config.fixed_init_cond == False and config.type_enc == 'none':
+                self._initial = MLP_standard(config.init_noise_size + self.lat_size_stat, self.out_size, config.init_mlp_size, 0, config.act_init, tanh=False).to(self.device)                 
+            self._drift = FiLMNDEs(config, 
+                                    in_size=self.in_size, 
+                                    out_size=self.out_size, 
+                                    nhidden_number=nhidden_number).to(self.device)
+            self._film_generator_drift = FiLMGenerator(config, 
+                                                       latent_dim_stat=self.lat_size_stat, 
+                                                       film_dims=self._drift.film_dims).to(self.device)
+            if config.sde:
+                if config.sde_split_training:
+                    # Model for the diffusion (residual part)
+                    self._residual = NSDE(config, self.lat_size_long_in, self.in_size, self.out_size).to(self.device)
+                else:
+                    self._latent_sde = NSDE(config, self.lat_size_long_in, self.in_size, self.out_size, drift_model=self._drift).to(self.device)
+            if config.estim_event_rate:
+                if config.indep_event_rate:
+                    self._event_rate = EventRate(config, 1).to(self.device)
+                else:
+                    self._event_rate = EventRate(config, self.out_size + 1).to(self.device)
         
         else:
             raise ValueError(f"Unknown latent_model_type: {config.latent_model}")
@@ -825,10 +845,7 @@ class Longitudinal_Latent_Model(nn.Module):
         
     
     def _initialize_weights(self, config):
-        # init_network_weights(self._initial)
         init_network_weights(self._drift)
-        # if config.latent_model == 'HyperNDEs':
-            # init_network_weights(self._hypernetwork_drift)
         if config.sde:
             if config.sde_split_training:
                 init_network_weights(self._residual)

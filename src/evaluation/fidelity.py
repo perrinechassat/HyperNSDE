@@ -19,7 +19,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.cuda.amp import autocast, GradScaler
 import torchcde
-
+from scipy.stats import ks_2samp
 
     
     
@@ -617,6 +617,219 @@ def kl_divergence_event_rate(
         "std_N_obs_syn": counts_s.std().item(),
         "std_N_obs_real": counts_r.std().item()
     }
+
+
+
+def event_intensity_quality(
+    x_real, m_real, T_real,
+    x_syn, m_syn, T_syn,
+    bins=80, eps=1e-8,
+    cached_real_data=None,
+    t_min=0.0,
+    component_names=None,
+    eval_t_max=None,
+    delta_quantile=0.995,
+):
+    """
+    Population-level fidelity of the multivariate observation process.
+    No real/synthetic subject pairing is assumed.
+    """
+
+    # ================================================================
+    # 0. BASIC SETUP / VALIDATION
+    # ================================================================
+    device = m_real.device
+    N_r, _, D = m_real.shape
+    N_s = m_syn.shape[0]
+    if m_syn.shape[-1] != D:
+        raise ValueError("Real and synthetic data must have the same number of variables.")
+    if D <= 0:
+        raise ValueError("Number of variables D must be positive.")
+    if bins <= 0:
+        raise ValueError("bins must be positive.")
+    if not (0.0 < delta_quantile <= 1.0):
+        raise ValueError("delta_quantile must lie in (0, 1].")
+    component_names = component_names or [f"x_{j}" for j in range(D)]
+    if len(component_names) != D:
+        raise ValueError("component_names must have length D.")
+
+    # Expand T to [N, L]
+    T_r = expand_times(T_real, N_r)
+    T_s = expand_times(T_syn, N_s)
+
+    # Valid observation-time mask at least one variable observed AND finite time.
+    mask_r = ((m_real.sum(dim=-1) > 0) & torch.isfinite(T_r))
+    mask_s = ((m_syn.sum(dim=-1) > 0) & torch.isfinite(T_s))
+    has_obs_r = mask_r.any(dim=1)
+    has_obs_s = mask_s.any(dim=1)
+
+    if not has_obs_r.any():
+        raise ValueError("Real data contain no valid observed events. Observation-process fidelity cannot be evaluated.")
+
+    # ================================================================
+    # 1. FIXED EVALUATION HORIZON
+    # ================================================================
+    if eval_t_max is None:
+        # Prefer the complete finite REAL time grid as the reference evaluation horizon.
+        finite_real_times = T_r[torch.isfinite(T_r)]
+        if finite_real_times.numel() == 0:
+            raise ValueError("T_real contains no finite times.")
+        eval_t_max = finite_real_times.max().item()
+    eval_t_max = float(eval_t_max)
+    if eval_t_max <= t_min:
+        raise ValueError("eval_t_max must be strictly greater than t_min.")
+    edges = torch.linspace(t_min, eval_t_max, bins + 1, device=device, dtype=T_r.dtype)
+
+    # ================================================================
+    # 2. EOS AND PERSON-TIME EXPOSURE
+    # ================================================================
+    eos_r_all = get_eos_from_grid(m_real, T_r, t_min=t_min)
+    eos_s_all = get_eos_from_grid(m_syn, T_s, t_min=t_min)
+
+    # Person-time exposure.
+    exposure_r = person_time_exposure(eos_r_all, edges)
+    exposure_s = person_time_exposure(eos_s_all, edges)
+    eos_r = eos_r_all[has_obs_r]
+    eos_s = eos_s_all[has_obs_s]
+
+    # ================================================================
+    # 3. VARIABLE-SPECIFIC OBSERVATION INTENSITIES
+    # ================================================================
+    D_per_variable = {}
+    for j, name in enumerate(component_names):
+        lambda_r_j, _ = estimate_component_intensity(m_real[..., j], T_r, exposure_r, edges)
+        lambda_s_j, _ = estimate_component_intensity(m_syn[..., j], T_s, exposure_s, edges)
+        d_j = poisson_intensity_divergence(lambda_r_j, lambda_s_j, exposure_r, N_r, eps)
+        D_per_variable[name] = float(d_j)
+
+    # ================================================================
+    # 4. EOS HAZARD / TERMINATION INTENSITY
+    # ================================================================
+    lambda_eos_r, _ = estimate_eos_hazard(eos_r, exposure_r, edges)
+    lambda_eos_s, _ = estimate_eos_hazard(eos_s, exposure_s, edges)
+    D_eos = poisson_intensity_divergence(lambda_eos_r, lambda_eos_s, exposure_r, N_r, eps)
+    D_eos = float(D_eos)
+
+    # ================================================================
+    # 5. RAW INTENSITY SCORES
+    # ================================================================
+    D_variables = float(sum(D_per_variable.values()))
+    D_intensity = float(D_variables + D_eos)
+
+    # ================================================================
+    # 7. FLATTENED EVENT DATA
+    # ================================================================
+    events_s = T_s[mask_s]
+    sample_indices_s = (torch.arange(N_s,device=device,).unsqueeze(1).expand_as(mask_s)[mask_s])
+    counts_s = mask_s.sum(dim=1).long()
+
+    # ------------------------------------------------
+    # REAL
+    # ------------------------------------------------
+    if cached_real_data is not None:
+        (events_r_cached, sample_indices_r_cached, counts_r_cached, deltas_r_cached, indices_r_cached) = cached_real_data
+        events_r = events_r_cached.clone()
+        sample_indices_r = (sample_indices_r_cached.clone())
+        counts_r = counts_r_cached.clone().long()
+        deltas_r = (None if deltas_r_cached is None else deltas_r_cached.clone())
+        indices_r = (None if indices_r_cached is None else indices_r_cached.clone())
+    else:
+        events_r = T_r[mask_r]
+        sample_indices_r = (torch.arange(N_r,device=device,).unsqueeze(1).expand_as(mask_r)[mask_r])
+        counts_r = mask_r.sum(dim=1).long()
+        # Compute REAL inter-event gaps here.
+        deltas_r, indices_r = get_deltas_and_indices(mask_r,T_r,N_r,)
+
+    # ================================================================
+    # 8. GLOBAL COUNT DISTRIBUTION: KL_N + TV_N
+    # ================================================================
+    max_count_global = max(
+        counts_r.max().item() if counts_r.numel() > 0 else 0,
+        counts_s.max().item() if counts_s.numel() > 0 else 0,
+    )
+    p_count_global = estimate_count_pmf(counts_r, max_count=max_count_global)
+    q_count_global = estimate_count_pmf(counts_s, max_count=max_count_global)
+    KL_N = discrete_kl(p_count_global, q_count_global, eps,).item()
+    TV_N = (0.5 * torch.abs(p_count_global - q_count_global).sum()).item()
+
+    # ================================================================
+    # 9. KL / KS ON EVENT TIMES
+    # ================================================================
+    if (events_r.numel() > 0 and events_s.numel() > 0):
+        # Use the fixed reference evaluation interval for histogram KL.
+        p_event = estimate_mean_individual_pdf(events_r, sample_indices_r, N_r, bins=bins, t_min=t_min, t_max=eval_t_max,)
+        q_event = estimate_mean_individual_pdf(events_s, sample_indices_s, N_s, bins=bins, t_min=t_min, t_max=eval_t_max,)
+        KL_event = discrete_kl(p_event, q_event, eps,).item()
+        event_result = ks_2samp(events_r.detach().cpu().numpy(), events_s.detach().cpu().numpy(), alternative="two-sided", method="auto",)
+        KS_event = float(event_result.statistic)
+    else:
+        KL_event = float("nan")
+        KS_event = float("nan")
+
+    # ================================================================
+    # 10. KL / KS ON EOS CONDITIONAL ON HAVING >= 1 OBSERVATION
+    # ================================================================
+    if (eos_r.numel() > 0 and eos_s.numel() > 0):
+        p_eos = estimate_histogram_pdf(eos_r, bins=bins, t_min=t_min, t_max=eval_t_max)
+        q_eos = estimate_histogram_pdf(eos_s, bins=bins, t_min=t_min, t_max=eval_t_max)
+        KL_eos = discrete_kl(p_eos, q_eos, eps).item()
+        eos_result = ks_2samp(eos_r.detach().cpu().numpy(), eos_s.detach().cpu().numpy(), alternative="two-sided", method="auto")
+        KS_eos = float( eos_result.statistic)
+    else:
+        KL_eos = float("nan")
+        KS_eos = float("nan")
+
+    # ================================================================
+    # 11. KL ON INTER-EVENT DELTAS
+    # ================================================================
+    deltas_s, indices_s = get_deltas_and_indices(mask_s, T_s, N_s)
+    delta_available = (
+        deltas_r is not None
+        and indices_r is not None
+        and deltas_s is not None
+        and indices_s is not None
+        and deltas_r.numel() > 0
+        and deltas_s.numel() > 0
+    )
+    if delta_available:
+        # Real-data-only reference cutoff.
+        delta_t_max_tensor = torch.quantile(deltas_r.float(), delta_quantile)
+        delta_t_max = float(delta_t_max_tensor.item())
+        # Fallback for degenerate delta distributions.
+        if (not math.isfinite(delta_t_max) or delta_t_max <= 0.0):
+            delta_t_max = float(deltas_r.max().item())
+        if (not math.isfinite(delta_t_max) or delta_t_max <= 0.0):
+            delta_t_max = eps
+        # Winsorize both distributions using the REAL cutoff.
+        deltas_r_clipped = deltas_r.clamp(min=0.0, max=delta_t_max)
+        deltas_s_clipped = deltas_s.clamp(min=0.0, max=delta_t_max)
+        p_delta = estimate_pdf_vectorized(deltas_r_clipped, indices_r, N_r, bins=bins, t_min=0.0, t_max=delta_t_max, eps=eps)
+        q_delta = estimate_pdf_vectorized(deltas_s_clipped, indices_s, N_s, bins=bins, t_min=0.0, t_max=delta_t_max, eps=eps)
+        KL_delta = discrete_kl(p_delta, q_delta, eps).item()
+    else:
+        KL_delta = float("nan")
+        delta_t_max = float("nan")
+
+    # ================================================================
+    # 13. FINAL RESULTS
+    # ================================================================
+    result = {
+        "D_intensity": D_intensity,
+        "D_intensity_scaled": (D_intensity / float(D + 1)),
+        "D_variables": D_variables,
+        "D_variables_scaled": (D_variables / float(D)),
+        "D_EOS_hazard": D_eos,
+        "KL_N": float(KL_N),
+        "TV_N": float(TV_N),
+        "KL_delta": float(KL_delta),
+        "KL_event": float(KL_event),
+        "KS_event": float(KS_event),
+        "KL_eos": float(KL_eos),
+        "KS_eos": float(KS_eos),
+    }
+
+    return result
+
 
 # -----------------------------------------------------------------------------
 # The classifier 2-sample test (C2ST)

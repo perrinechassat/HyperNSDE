@@ -15,11 +15,6 @@ def init_network_weights(net, std = 0.1):
             if m.bias is not None:
                 torch.nn.init.constant_(m.bias, val=0)
 
-def get_device(tensor):
-	device = torch.device("cpu")
-	if tensor.is_cuda:
-		device = tensor.get_device()
-	return device
 
 # ==================================================================#
 # ==================================================================#
@@ -198,116 +193,6 @@ def print_current_losses(epoch, iters, train_losses, val_losses, t_epoch, t_comp
                 plt.savefig(img_name)
                 plt.close()
 
-
-def plot_final_losses(train_losses_list, val_losses_list, val_mses_list, log_name):
-    plt.plot(range(len(train_losses_list)), train_losses_list, label='Training Loss')
-    plt.plot(range(len(val_losses_list)), val_losses_list, label='Validation Loss')
-    plt.plot(range(len(val_mses_list)), val_mses_list, label='Validation MSE')
-    img_name = log_name[:-4] + '_avg.png'
-    plt.legend()
-    plt.title('Training and Validation Losses/MSE')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.savefig(img_name)
-    plt.close()
-
-
-def generate_poisson_process_thinning(lambdas, grid, T):
-    """
-    Generates a non-homogeneous Poisson process on [0, T] from the intensities using the thinning method.
-
-    Args:
-        lambdas (torch.Tensor): Tensor of shape (M,) representing the intensities on the fine grid.
-        grid (torch.Tensor): Tensor of shape (M,) representing the fine grid.
-        T (float): Total duration of the interval [0, T].
-
-    Returns:
-        torch.Tensor: Tensor representing the generated event times.
-    """
-    M = len(lambdas)
-
-    lambda_max = lambdas.max().item()
-
-    events = []
-    t = 0
-    while t < T:
-        u = torch.rand(1)
-        t_candidate = t - (1 / lambda_max) * torch.log(u)
-
-        if t_candidate >= T:
-            break
-        idx = torch.searchsorted(grid, t_candidate, right=True).item() - 1
-        idx = max(0, min(idx, M - 1))
-        acceptance_prob = lambdas[idx].item() / lambda_max
-        if torch.rand(1).item() < acceptance_prob:
-            events.append(t_candidate)
-
-        t = t_candidate
-
-    return torch.tensor(events)
-
-
-def generate_poisson_processes_thinning(lambdas, grid, T):
-    """
-    Generates N non-homogeneous Poisson processes on [0, T] from the intensities using the thinning method.
-
-    Args:
-        lambdas (torch.Tensor): Tensor of shape (N, M) representing the intensities on the fine grid.
-        grid (torch.Tensor): Tensor of shape (M,) representing the fine grid.
-        T (float): Total duration of the interval [0, T].
-
-    Returns:
-        List[torch.Tensor]: List of tensors representing the generated event times for each Poisson process.
-    """
-    N, M = lambdas.shape
-    poisson_processes = []
-    lambda_max = lambdas.max().item()
-
-    for i in range(N):
-        events = []
-        t = 0
-        while t < T:
-            u = torch.rand(1)
-            t_candidate = t - (1 / lambda_max) * torch.log(u)
-
-            if t_candidate >= T:
-                break
-
-            idx = torch.searchsorted(grid, t_candidate, right=True).item() - 1
-            idx = max(0, min(idx, M - 1))
-
-            acceptance_prob = lambdas[i, idx].item() / lambda_max
-            if torch.rand(1).item() < acceptance_prob:
-                events.append(t_candidate)
-
-            t = t_candidate
-
-        poisson_processes.append(torch.tensor(events))
-
-    return poisson_processes
-
-
-def union_grids_with_tolerance(grids, tolerance):
-    """
-    Computes the union of multiple grids with a given tolerance.
-
-    Args:
-        grids (List[torch.Tensor]): List of tensors representing the grids.
-        tolerance (float): Tolerance used to merge close values.
-
-    Returns:
-        torch.Tensor: Tensor representing the union of the grids with the specified tolerance.
-    """
-    combined_grid = torch.cat(grids)
-    combined_grid = torch.unique(combined_grid, sorted=True)
-    
-    diff =  combined_grid[1:] - combined_grid[:-1]
-
-    mask = diff >= tolerance 
-    mask = torch.cat((mask, torch.Tensor([True]))).bool()
-    combined_grid = combined_grid[mask]
-
-    return combined_grid
 
 
 def generate_mask_grid_from_inhomogeneous_poisson(intensities, reg_grid):
@@ -510,63 +395,6 @@ def concatenate_datasets(X_obs, X_gen, mask_obs, mask_gen, T_obs, T_gen):
     insert_values(X_gen, mask_gen, T_gen, X_concat, mask_concat, index_offset=N)
 
     return X_concat, mask_concat, T_concat
-
-
-def onehot_batch_norm(s_onehot, s_types, s_miss):
-    # Batch Normalization for the Onehot encoded static data
-    s_data_norm = s_onehot.clone()
-    b_mean, b_var = [], []
-    onehot_id = 0
-    n_stat_var_init = s_types.shape[0]
-
-    for i in range(n_stat_var_init):
-        if s_types[i, 0] == 'real':
-            n_vec = []
-            for j in range(s_miss.shape[0]):
-                if s_miss[j, i] == 1:
-                    n_vec.append(s_onehot[j, onehot_id])
-
-            n_vec = torch.stack(n_vec)
-            mean = torch.mean(n_vec)
-            var = torch.var(n_vec)
-            var = torch.clamp(var, min=1e-6, max=1e20)  # Prevent division by zero
-            # s_data_norm[:, i] = (s_data_norm[:, i] - mean) / torch.sqrt(var)
-
-            normalized_s_data_i = (s_data_norm[:, onehot_id] - mean) / torch.sqrt(var)
-            normalized_s_data_i[s_miss[:, i] == 0.0] = 0  # Missing values set to 0
-            s_data_norm[:, onehot_id] = normalized_s_data_i
-
-            b_mean.append(mean)
-            b_var.append(var)
-            onehot_id += 1
-        elif s_types[i, 0] == 'pos':
-            n_vec = []
-            for j in range(s_miss.shape[0]):
-                if s_miss[j, i] == 1:
-                    s_onehot_log = torch.log1p(s_onehot[j, onehot_id])
-                    n_vec.append(s_onehot_log)
-
-            n_vec = torch.stack(n_vec)
-            mean = torch.mean(n_vec)
-            var = torch.var(n_vec)
-            var = torch.clamp(var, min=1e-6, max=1e20)  # Prevent division by zero
-            # s_data_norm[:, i] = (torch.log1p(s_data_norm[:, i]) - mean) / torch.sqrt(var)
-
-            normalized_s_data_i = (torch.log1p(s_data_norm[:, onehot_id]) - mean) / torch.sqrt(var)
-            normalized_s_data_i[s_miss[:, i] == 0.0] = 0  # Missing values set to 0
-            s_data_norm[:, i] = normalized_s_data_i
-
-            b_mean.append(mean)
-            b_var.append(var)
-            onehot_id += 1
-        else:
-            onehot_id += s_types[i, 1]
-            
-    b_mean = torch.stack(b_mean).to(s_onehot.device)
-    b_var = torch.stack(b_var).to(s_onehot.device)
-    s_data_norm = s_data_norm.to(s_onehot.device)
-
-    return s_data_norm, b_mean, b_var
 
 
 def onehot_batch_norm_bis(s_onehot, s_types, s_miss):

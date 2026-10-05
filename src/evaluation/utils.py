@@ -4,6 +4,7 @@ import pysiglib.torch_api as pysiglib
 import torch.nn as nn
 import torchcde
 
+
 def time_aug(x, T, time_norm=True):
     if time_norm:
         time_grid_norm = (T - T.min()) / (T.max() - T.min())
@@ -141,22 +142,6 @@ def compute_masked_correlation_matrix(x_flat: torch.Tensor, m_flat: torch.Tensor
     
     return corr
 
-def get_median_sigma(X):
-    if X.shape[0] > 1000:
-        idx = torch.randperm(X.shape[0])[:1000]
-        X = X[idx]
-    
-    dists = torch.pdist(X).pow(2) # Returns condensed distance vector
-    median_dist = dists.median()
-    
-    return torch.sqrt(median_dist / 2)
-
-def get_z_score(X):
-    mu = X.mean(dim=0, keepdim=True)
-    sigma = X.std(dim=0, keepdim=True) + 1e-8
-    return (X - mu) / sigma
-
-
 
 def fast_signature_dist_long(x1, x2, m1, m2, T, kernel='rbf', dyadic_order=3, sigma=0.5, lead_lag=False, chunk_size=256, squared = True):
     """
@@ -247,6 +232,7 @@ def fast_pdist_long(
     else:
         return torch.sqrt(dist_sq + 1e-8)
 
+
 def fast_pdist_static(w1, w2):
     """
     Vectorized L2 distance for static data (N, F).
@@ -271,20 +257,6 @@ def compute_kernel_matrix(A, B, kernel, gamma, coef0, degree):
     
     elif kernel == "polynomial":
         return (gamma * torch.mm(A, B.t()) + coef0).pow(degree)
-
-def get_batch_correlations(x, m):
-    mask = m.bool().float() # Ensure float
-    counts = mask.sum(dim=1, keepdim=True) # (N, 1, F)
-    masked_x = x * mask
-    means = masked_x.sum(dim=1, keepdim=True) / (counts + 1e-8) # (N, 1, F)
-    centered = (x - means) * mask # (N, T, F)
-    numerators = torch.bmm(centered.transpose(1, 2), centered) # (N, F, F)
-    sum_sq = (centered ** 2).sum(dim=1) # (N, F)
-    stds = torch.sqrt(sum_sq).unsqueeze(2) # (N, F, 1)
-    denominators = torch.bmm(stds, stds.transpose(1, 2))
-    corrs = numerators / (denominators + 1e-8)
-    corrs = torch.nan_to_num(corrs, 0.0)
-    return corrs
 
 
 def estimate_pdf_vectorized(events_flat, sample_indices, num_samples, bins=50, t_min=0, t_max=1, eps=1e-8):
@@ -368,7 +340,6 @@ def fill_missing_values_long(x, mask, times, filling_type='last', tol=1e-7):
     return filled_data, mask, times
 
 
-
 def expand_mask_to_last_obs(M):
     """
     M: (N, n_tps, n_vars) binary mask, 1 = observed
@@ -386,3 +357,221 @@ def expand_mask_to_last_obs(M):
     expanded = (time_idx <= last_obs_idx_exp).float()  # (N, n_tps, n_vars)
     expanded = expanded * has_obs.unsqueeze(1)
     return expanded
+
+
+def estimate_pdf_vectorized(events_flat, sample_indices, num_samples, bins=50, t_min=0, t_max=1, eps=1e-8):
+    """
+    Computes the mean of per-sample PDFs using vectorized scatter operations.
+    """
+    bin_indices = ((events_flat - t_min) / (t_max - t_min + 1e-7) * bins).long()
+    bin_indices = torch.clamp(bin_indices, 0, bins - 1)
+
+    max_sample_idx = sample_indices.max().item() if sample_indices.numel() > 0 else 0
+    actual_num_samples = max(num_samples, max_sample_idx + 1)
+    flat_indices = sample_indices * bins + bin_indices
+    grid = torch.zeros(actual_num_samples * bins, device=events_flat.device)
+    
+    grid.scatter_add_(0, flat_indices, torch.ones_like(events_flat, dtype=torch.float32))
+    histograms = grid.view(actual_num_samples, bins)
+    
+    row_sums = histograms.sum(dim=1, keepdim=True)
+    per_sample_pdfs = histograms / (row_sums + eps)
+
+    pdf = per_sample_pdfs.mean(dim=0)
+    pdf = pdf / pdf.sum().clamp_min(eps)
+    
+    return pdf
+
+
+def estimate_mean_individual_pdf(
+    events_flat,
+    sample_indices,
+    num_samples,
+    bins=50,
+    t_min=0.0,
+    t_max=1.0,
+):
+    """
+    Construct event-time distribution with equal individual weighting.
+    For each individual i:
+        p_i(t) = histogram_i / number_of_events_i
+    Then:
+        p(t) = mean_i p_i(t)
+    Individuals with zero events are excluded here because they do not have a conditional event-time distribution. 
+    Their frequency is captured separately by the count distribution.
+    """
+
+    device = events_flat.device
+    if events_flat.numel() == 0:
+        return torch.zeros(bins, device=device)
+
+    # Map event time -> histogram bin
+    bin_indices = ((events_flat - t_min) / (t_max - t_min + 1e-12) * bins).long()
+    bin_indices = torch.clamp(bin_indices, 0, bins - 1)
+
+    # Flatten (individual, bin) into one index
+    flat_indices = (sample_indices.long() * bins + bin_indices)
+    grid = torch.zeros(num_samples * bins, device=device, dtype=torch.float32)
+    grid.scatter_add_(0, flat_indices, torch.ones_like(events_flat, dtype=torch.float32))
+    histograms = grid.view(num_samples, bins)
+    # Number of events for each individual
+    row_sums = histograms.sum(dim=1, keepdim=True)
+
+    # Only individuals with >= 1 event have an event-time PDF
+    valid = row_sums.squeeze(1) > 0
+    if not valid.any():
+        return torch.zeros(bins, device=device,)
+
+    # Normalize each individual independently
+    individual_pdfs = (histograms[valid] / row_sums[valid])
+
+    pdf = individual_pdfs.mean(dim=0)
+    pdf = pdf / pdf.sum().clamp_min(1e-12)
+    return pdf
+
+
+def discrete_kl(p, q, eps=1e-8):
+    """
+    Stable KL(p || q).
+    A small pseudocount is added to every bin and both distributions are renormalized afterwards.
+    """
+    p = p.float()
+    q = q.float()
+    p = p + eps
+    q = q + eps
+    p = p / p.sum()
+    q = q / q.sum()
+    return torch.sum(p * torch.log(p / q))
+
+
+def estimate_count_pmf(
+    counts,
+    max_count=None,
+):
+    """
+    Empirical PMF of number of observations:
+        P(N = n)
+    Includes N=0.
+    """
+    counts = counts.long()
+    if max_count is None:
+        max_count = counts.max().item()
+    pmf = torch.bincount(counts, minlength=max_count + 1,).float()
+    pmf = pmf / pmf.sum().clamp_min(1e-12)
+    return pmf
+
+
+def estimate_histogram_pdf(
+    values,
+    bins=50,
+    t_min=0.0,
+    t_max=1.0,
+):
+    """
+    Standard empirical histogram distribution.
+
+    Unlike estimate_mean_individual_pdf(), each value corresponds
+    to one individual already, so no patient-level reweighting
+    is necessary.
+    """
+    device = values.device
+    if values.numel() == 0:
+        return torch.zeros(bins, device=device)
+    bin_indices = ((values - t_min) / (t_max - t_min + 1e-12) * bins).long()
+    bin_indices = torch.clamp(bin_indices, 0, bins - 1)
+    histogram = torch.bincount(bin_indices, minlength=bins,).float()
+    histogram = (histogram / histogram.sum().clamp_min(1e-12))
+    return histogram
+
+
+def get_eos_from_grid(m, T, t_min=0.0):
+    """
+    EOS = last observed grid time.
+
+    If an individual has no observed events:
+        EOS = t_min.
+    """
+    observed = (m.sum(dim=-1) > 0) & torch.isfinite(T)
+    valid = observed.any(dim=1)
+    masked_times = torch.where(observed, T, torch.full_like(T, -torch.inf))
+    eos = masked_times.max(dim=1).values
+    eos = torch.where(valid, eos, torch.full_like(eos, t_min))
+    return eos
+
+
+def expand_times(T, N):
+    """Convert T=[L] or [N,L] to [N,L]."""
+    if T.dim() == 1:
+        return T.unsqueeze(0).expand(N, -1)
+    if T.dim() == 2 and T.shape[0] == N:
+        return T
+    raise ValueError("T must have shape [L] or [N, L].")
+
+
+def person_time_exposure(eos, edges):
+    """
+    Total at-risk time in every bin.
+
+    For bin [a,b):
+        E_b = sum_i length([a,b) intersection [0, EOS_i]).
+    """
+    left, right = edges[:-1], edges[1:]
+    exposure = torch.minimum(eos[:, None], right[None, :]) - left[None, :]
+    exposure = torch.clamp(exposure, min=0.0)
+    exposure = torch.minimum(exposure, (right - left)[None, :])
+    return exposure.sum(dim=0)
+
+
+def histogram_counts(values, edges):
+    """Counts values in common histogram bins."""
+    B = len(edges) - 1
+    idx = torch.bucketize(values, edges, right=False) - 1
+    idx = torch.clamp(idx, 0, B - 1)
+    return torch.bincount(idx, minlength=B).float()
+
+
+def estimate_component_intensity(mask_component, T, exposure, edges):
+    """
+    Piecewise-constant empirical intensity for one variable:
+
+        lambda_b = number of events in b / person-time in b.
+    """
+    valid = (mask_component > 0) & torch.isfinite(T)
+    events = T[valid]
+    counts = histogram_counts(events, edges) if events.numel() else torch.zeros(len(edges) - 1, device=T.device)
+
+    intensity = torch.zeros_like(counts)
+    at_risk = exposure > 0
+    intensity[at_risk] = counts[at_risk] / exposure[at_risk]
+    return intensity, counts
+
+
+def estimate_eos_hazard(eos, exposure, edges):
+    """
+    EOS is a one-time termination event, so:
+
+        lambda_EOS,b = EOS events in b / person-time at risk in b.
+    """
+    counts = histogram_counts(eos, edges)
+    hazard = torch.zeros_like(counts)
+    at_risk = exposure > 0
+    hazard[at_risk] = counts[at_risk] / exposure[at_risk]
+    return hazard, counts
+
+
+def poisson_intensity_divergence(lambda_real, lambda_syn, exposure_real, N_real, eps=1e-8):
+    """
+    Empirical counting-process / Poisson intensity divergence:
+
+        sum_b E_real,b / N_real *
+        [lr log(lr / ls) - lr + ls]
+
+    This is an expected divergence per real individual.
+    """
+    lr, ls = lambda_real.float(), lambda_syn.float()
+    term = ls.clone()
+
+    positive = lr > 0
+    term[positive] = lr[positive] * torch.log(lr[positive] / ls[positive].clamp_min(eps)) - lr[positive] + ls[positive]
+
+    return torch.sum((exposure_real / float(N_real)) * term).item()

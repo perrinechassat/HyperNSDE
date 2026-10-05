@@ -7,7 +7,6 @@ sys.path.append('../')
 sys.path.append('../../')
 from data_loader.load_data import get_data, read_csv_values, weighter, normalize_long
 from src.parser import base_parser
-from src.utils import onehot_batch_norm
 import os
 import glob
 import pickle

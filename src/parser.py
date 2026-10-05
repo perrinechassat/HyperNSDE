@@ -35,6 +35,10 @@ def base_parser(return_unknown=False):
                         type=bool,
                         default=True,
                         help='If True, split between deterministic and stochastic training steps for NSDEs.')
+    parser.add_argument('--indep_event_rate', 
+                        type=bool,
+                        default=False,
+                        help='Either to use state-independent or state-dependent intensity model.')
  
  
     # General things
@@ -198,7 +202,7 @@ def base_parser(return_unknown=False):
     parser.add_argument('--latent_model',  
                         type=str,
                         default='HyperNDEs',
-                        choices=['MultiNDEs', 'StatMoNDEs', 'HyperNDEs'],
+                        choices=['MultiNDEs', 'StatMoNDEs', 'HyperNDEs', 'FiLMNDEs'],
                         help='Type of model used for the longitudinal latent variable.')
     parser.add_argument('--sde',  
                         type=bool,
