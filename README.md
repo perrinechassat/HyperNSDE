@@ -1,6 +1,14 @@
 # HyperNSDE
 
-HyperNSDE is a generative model for synthetic health data that jointly models static covariates and irregular longitudinal trajectories using Neural Stochastic Differential Equations. The model captures dependencies between baseline/static patient characteristics and temporal dynamics, enabling the generation of realistic synthetic longitudinal datasets with associated static features.
+Official implementation of the following paper:
+
+> Perrine Chassat and Agathe Guilloux. **HyperNSDE: Personalized Neural SDEs for Joint Static–Longitudinal Clinical Data Generation.** *Advances in Neural Information Processing Systems (NeurIPS)*, 2026.
+
+HyperNSDE is a continuous-time generative model for synthetic clinical data that jointly models static covariates, irregular longitudinal trajectories, and informative observation times. A hypernetwork conditions a latent Neural Stochastic Differential Equation (SDE) on static patient representations, allowing baseline characteristics to shape trajectory evolution beyond the initial condition. Observation times are modeled through a latent-state-dependent intensity process, and training uses a non-adversarial signature-kernel objective.
+
+![HyperNSDE architecture: static patient representations condition a latent Neural SDE through a hypernetwork to jointly generate static covariates, longitudinal trajectories, and observation times.](assets/hypernsde-overview.png)
+
+*Overview of the HyperNSDE architecture.*
 
 ## Installation
 
@@ -13,7 +21,7 @@ The installation requires [Conda](https://docs.conda.io/en/latest/).
 Clone the repository and create the Conda environment:
 
 ```bash
-git clone <anonymous-repository-url>
+git clone https://github.com/perrinechassat/HyperNSDE.git
 cd HyperNSDE
 git submodule update --init --recursive
 bash install_env_conda.sh
@@ -86,6 +94,15 @@ experiments/
 
 The code is organized to reproduce the simulation and real-data experiments described in the paper. Configuration files and experiment scripts are provided in the experiments/ directory.
 
-## Anonymity
+## Citation
 
-This repository has been prepared for anonymous peer review. Author names, institutional information, and links to non-anonymous repositories have been removed.
+If you use HyperNSDE in your research, please cite:
+
+```bibtex
+@inproceedings{chassat2026hypernsde,
+  title     = {{HyperNSDE}: Personalized Neural {SDEs} for Joint Static--Longitudinal Clinical Data Generation},
+  author    = {Chassat, Perrine and Guilloux, Agathe},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2026}
+}
+```
