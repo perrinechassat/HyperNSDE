@@ -1,12 +1,12 @@
 <div align="center">
 
-# HyperNSDE
+# HyperNSDE 
 
 </div>
 
 Official implementation of the following paper:
 
-> Perrine Chassat and Agathe Guilloux. **HyperNSDE: Personalized Neural SDEs for Joint Static–Longitudinal Clinical Data Generation.** *Advances in Neural Information Processing Systems (NeurIPS)*, 2026.
+> Perrine Chassat and Agathe Guilloux. **HyperNSDE: Personalized Neural SDEs for Joint Static–Longitudinal Clinical Data Generation.** *Advances in Neural Information Processing Systems (NeurIPS)*, 2026. [Paper](https://arxiv.org/abs/2610.07383)
 
 HyperNSDE is a continuous-time generative model for synthetic clinical data that jointly models static covariates, irregular longitudinal trajectories, and informative observation times. A hypernetwork conditions a latent Neural Stochastic Differential Equation (SDE) on static patient representations, allowing baseline characteristics to shape trajectory evolution beyond the initial condition. Observation times are modeled through a latent-state-dependent intensity process, and training uses a non-adversarial signature-kernel objective.
 
